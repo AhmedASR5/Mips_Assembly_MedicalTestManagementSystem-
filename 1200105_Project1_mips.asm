@@ -12,7 +12,7 @@ promptTestName: .asciiz "\nEnter Test Name: "
 testName: .space 5 # Space for the name
 
 promptTestDate: .asciiz "\nEnter Test Date (YYYY-MM): "
-testDate: .space 8  # Space for "YYYY-MM" + null terminator
+testDate: .space 9  # Space for "YYYY-MM" + null terminator
 
 promptTestResult: .asciiz "\nEnter Test Result (as a floating-point number): "
 .align 3  # Align the next data declaration on a doubleword boundary
@@ -157,7 +157,7 @@ add_test:
 
     li $v0, 8
     la $a0, testDate
-    li $a1, 8  
+    li $a1, 9
     syscall
     
     # Prompt the user for input
@@ -166,18 +166,17 @@ add_test:
     syscall
 
 
-    # Read double-precision floating-point number
-    li $v0, 7  # Syscall code for reading double-precision float
-    syscall  # Read value is now in $f0 and $f1
+    li $v0, 8                  # Syscall code for reading a string
+    la $a0, floatBuffer       # Address of buffer to store the string
+    li $a1, 8                 # The maximum number of characters to read
+    syscall
 
-    # Store the double-precision value into the buffer
-    la $t0, floatBuffer   # Load address of buffer
-    sdc1 $f0, 0($t0)  # Store double-precision value from $f0-$f1 into buffer
+#----------------------------------- writing the information to the file--------------------------------
 
 
- # Replace newline with comma in idBuffer if present
+ # Replace newline with colon in testDate if present
     la $a0, idBuffer
-    jal replace_newline_with_comma
+    jal replace_newline_with_colon
 
     # Write Patient ID to the file
     li $v0, 15
@@ -185,6 +184,7 @@ add_test:
     la $a1, idBuffer
     li $a2, 11                 # Example length, adjust based on actual content length
     syscall
+
 
     # Replace newline with comma in testName if present
     la $a0, testName
@@ -205,17 +205,32 @@ add_test:
     li $v0, 15
     move $a0, $s7
     la $a1, testDate
-    li $a2, 8                  # Example length, adjust as needed
+    li $a2, 9                  # Example length, adjust as needed
     syscall
 
-    # Optionally, handle the floating-point result here, if conversion to string is managed
+    # Replace newline with space in floatBuffer if present
 
-    # Write a newline to finish this record
+    la $a0, floatBuffer
+    jal replace_newline_with_space
+
+    # Write Test Result to the file
+    li $v0, 15                 # Syscall for write to file
+    move $a0, $s7             
+    la $a1, floatBuffer      
+    li $a2, 8 
+    syscall
+
+
+    # Write newline to the file
     li $v0, 15
     move $a0, $s7
     la $a1, newline
     li $a2, 1
     syscall
+
+
+#-----------------------------------End of writing the information to the file--------------------------------
+
 
     # Return to the menu
     j menu_loop
@@ -323,39 +338,80 @@ validatePatientID:
         jr $ra
 
 replace_newline_with_comma:
-    lb $t0, 0($a0)            # Load the current byte from the buffer into $t0
+    lb $t0, 0($a0)                # Load the current byte from the buffer into $t0
     beq $t0, $zero, end_replacement  # If we've hit the null terminator, exit the loop
     
-    li $t1, 0x0A              # ASCII value of '\n'
-    li $t3, 0x20              # ASCII value of space ' '
-    bne $t0, $t1, check_space # If the current byte is not '\n', check for space
+    li $t1, 0x0A                  # ASCII value of '\n'
+    li $t3, 0x20                  # ASCII value of space ' '
+    bne $t0, $t1, check_space     # If the current byte is not '\n', check for space
 
     # If we've found a newline character, replace it with a comma
-    li $t2, 0x2C              # ASCII value of ','
-    sb $t2, 0($a0)            # Store the comma in place of the newline character
-    j next_char               # Proceed to the next character
+    li $t2, 0x2C                  # ASCII value of ','
+    sb $t2, 0($a0)                # Store the comma in place of the newline character
+    j next_char                   # Proceed to the next character
 
 check_space:
-    bne $t0, $t3, next_char   # If the current byte is not space, go to the next character
-
-    # If we've found a space character, we effectively "remove" it by shifting
-    # all subsequent characters one position to the left
-    add $a1, $a0, 1           # $a1 points to the next character in the buffer
+    bne $t0, $t3, next_char       # If the current byte is not space, go to the next character
+    
+    # Here, we found a space and want to "remove" it by shifting subsequent characters left.
+    # This loop will start from the current space character's position.
 shift_loop:
-    lb $t4, 0($a1)            # Load the next byte into $t4
-    sb $t4, 0($a0)            # Overwrite the current byte with the next byte
-    beqz $t4, end_replacement # If we've hit the null terminator, we're done
-    addiu $a0, $a0, 1         # Move to the next character in the buffer
-    addiu $a1, $a1, 1         # $a1 also moves to its next character
-    j shift_loop              # Continue shifting
+    lb $t4, 1($a0)                # Load the next byte into $t4
+    sb $t4, 0($a0)                # Overwrite the current byte with the next byte
+    beqz $t4, end_replacement     # If we've hit a null terminator during shifting, we're done
+    addiu $a0, $a0, 1             # Move to the next character in the buffer
+    j shift_loop                  # Continue shifting until we hit a null terminator
 
 next_char:
-    addiu $a0, $a0, 1         # Move to the next character in the buffer
+    addiu $a0, $a0, 1             # Move to the next character in the buffer
     j replace_newline_with_comma  # Repeat the loop
 
 end_replacement:
-    jr $ra                    # Return from the function   
+    jr $ra                        # Return from the function
 
+
+
+
+replace_newline_with_space:
+    lb $t0, 0($a0)            # Load the current byte from the buffer into $t0
+
+loop2:
+    beq $t0, $zero, end2       # If we've hit the null terminator, exit the loop
+    li $t1, 0x0A              # ASCII value of '\n'
+    bne $t0, $t1, check_next2  # If the current byte is not '\n', go to the next character
+    
+    # If we've found a newline character, replace it with a space
+    li $t2, 0x20              # ASCII value of space ' '
+    sb $t2, 0($a0)            # Store the space in place of the newline character
+
+check_next2:
+    addiu $a0, $a0, 1         # Move to the next character in the buffer
+    lb $t0, 0($a0)            # Load the next byte from the buffer into $t0
+    j loop2                    # Repeat the loop
+
+end2:
+    jr $ra                    # Return from the function
+
+
+replace_newline_with_colon:
+    lb $t0, 0($a0)            # Load the current byte from the buffer into $t0
+
+loop3:
+    beq $t0, $zero, end3       # If we've hit the null terminator, exit the loop
+    li $t1, 0x0A              # ASCII value of '\n'
+    bne $t0, $t1, check_next3  # If the current byte is not '\n', go to the next character
+    
+    # If we've found a newline character, replace it with a colon
+    li $t2, 0x3A              # ASCII value of ':'
+    sb $t2, 0($a0)            # Store the colon in place of the newline character
+
+check_next3:
+    addiu $a0, $a0, 1         # Move to the next character in the buffer
+    lb $t0, 0($a0)            # Load the next byte from the buffer into $t0
+    j loop3                    # Repeat the loop
+
+end3:
+    jr $ra                    # Return from the function
 #---------------------------------------Functions area--------------------------------------------        
 
 end:
