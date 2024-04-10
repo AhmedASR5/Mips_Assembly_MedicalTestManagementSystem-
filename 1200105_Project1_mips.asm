@@ -4,11 +4,12 @@ filename: .asciiz "testResults.txt"
 openFlags: .word 0x0001       # Flag for write and create
 mode: .word 0x01B6            # Mode for file permissions (0644)
 
+
 promptID: .asciiz "Enter Patient ID (7 digits): "
 idBuffer: .space 11 # Buffer for ID, assuming max 10 chars + null terminator
 
 promptTestName: .asciiz "\nEnter Test Name: "
-testName: .space 12 # Space for the name
+testName: .space 5 # Space for the name
 
 promptTestDate: .asciiz "\nEnter Test Date (YYYY-MM): "
 testDate: .space 8  # Space for "YYYY-MM" + null terminator
@@ -27,25 +28,31 @@ invalidOption: .asciiz "Invalid option. Please try again.\n"
 prompt: .asciiz "Your choice: "
 
 
+completeRecord: .space 100  # Adjust based on your needs
+delimiter: .asciiz ", "
+newline: .asciiz "\n"
+
 .text
 .globl main
 
 main:
+
 
 #----------------------------------------Opening the file for writing----------------------------------------
 
 # Open the file for writing
     li $v0, 13                 # Syscall: open file
     la $a0, filename           # Filename: pointer to "testResults.txt"
-    li $a1, openFlags          # Flags: write and create
-    li $a2, mode               # Mode: file permissions
+    lw  $a1, openFlags          # Flags: write and create
+    lw  $a2, mode               # Mode: file permissions
     syscall
     move $s7, $v0              # Save the file descriptor to $s7
-    j menu_loop   
+  
 
 #---------------------------------------- End of Opening the file for writing--------------------------------
 
-   
+
+
 
 #----------------------------------------Menu--------------------------------     
 
@@ -105,6 +112,7 @@ exit_program:
 #----------------------------------------Getting information from the user (Add test) --------------------------------
 
 add_test:
+
     # Prompt for Patient ID
     li $v0, 4
     la $a0, promptID
@@ -139,7 +147,7 @@ add_test:
     #read	 	
     li $v0, 8
     la $a0, testName
-    li $a1, 12  
+    li $a1, 5
     syscall
     
     # Prompt and Read Test Date
@@ -167,7 +175,52 @@ add_test:
     sdc1 $f0, 0($t0)  # Store double-precision value from $f0-$f1 into buffer
 
 
-j menu_loop
+ # Replace newline with comma in idBuffer if present
+    la $a0, idBuffer
+    jal replace_newline_with_comma
+
+    # Write Patient ID to the file
+    li $v0, 15
+    move $a0, $s7
+    la $a1, idBuffer
+    li $a2, 11                 # Example length, adjust based on actual content length
+    syscall
+
+    # Replace newline with comma in testName if present
+    la $a0, testName
+    jal replace_newline_with_comma
+
+    # Write Test Name
+    li $v0, 15
+    move $a0, $s7
+    la $a1, testName
+    li $a2, 5               # Example length, adjust as needed
+    syscall
+
+    # Replace newline with comma in testDate if present
+    la $a0, testDate
+    jal replace_newline_with_comma
+
+    # Write Test Date
+    li $v0, 15
+    move $a0, $s7
+    la $a1, testDate
+    li $a2, 8                  # Example length, adjust as needed
+    syscall
+
+    # Optionally, handle the floating-point result here, if conversion to string is managed
+
+    # Write a newline to finish this record
+    li $v0, 15
+    move $a0, $s7
+    la $a1, newline
+    li $a2, 1
+    syscall
+
+    # Return to the menu
+    j menu_loop
+
+  
 
 
 #------------------------------------Getting information from the user----------------------------  
@@ -268,7 +321,41 @@ validatePatientID:
     invalid:
         li $v0, 0 # Set return value to invalid
         jr $ra
-        
+
+replace_newline_with_comma:
+    lb $t0, 0($a0)            # Load the current byte from the buffer into $t0
+    beq $t0, $zero, end_replacement  # If we've hit the null terminator, exit the loop
+    
+    li $t1, 0x0A              # ASCII value of '\n'
+    li $t3, 0x20              # ASCII value of space ' '
+    bne $t0, $t1, check_space # If the current byte is not '\n', check for space
+
+    # If we've found a newline character, replace it with a comma
+    li $t2, 0x2C              # ASCII value of ','
+    sb $t2, 0($a0)            # Store the comma in place of the newline character
+    j next_char               # Proceed to the next character
+
+check_space:
+    bne $t0, $t3, next_char   # If the current byte is not space, go to the next character
+
+    # If we've found a space character, we effectively "remove" it by shifting
+    # all subsequent characters one position to the left
+    add $a1, $a0, 1           # $a1 points to the next character in the buffer
+shift_loop:
+    lb $t4, 0($a1)            # Load the next byte into $t4
+    sb $t4, 0($a0)            # Overwrite the current byte with the next byte
+    beqz $t4, end_replacement # If we've hit the null terminator, we're done
+    addiu $a0, $a0, 1         # Move to the next character in the buffer
+    addiu $a1, $a1, 1         # $a1 also moves to its next character
+    j shift_loop              # Continue shifting
+
+next_char:
+    addiu $a0, $a0, 1         # Move to the next character in the buffer
+    j replace_newline_with_comma  # Repeat the loop
+
+end_replacement:
+    jr $ra                    # Return from the function   
+
 #---------------------------------------Functions area--------------------------------------------        
 
 end:
