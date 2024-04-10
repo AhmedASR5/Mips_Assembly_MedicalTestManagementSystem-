@@ -9,7 +9,7 @@ promptID: .asciiz "Enter Patient ID (7 digits): "
 idBuffer: .space 11 # Buffer for ID, assuming max 10 chars + null terminator
 
 promptTestName: .asciiz "\nEnter Test Name: "
-testName: .space 5 # Space for the name
+testName: .space 7 # Space for the name
 
 promptTestDate: .asciiz "\nEnter Test Date (YYYY-MM): "
 testDate: .space 9  # Space for "YYYY-MM" + null terminator
@@ -26,6 +26,17 @@ msgInvalid: .asciiz "\nInvalid ID. Must be exactly 7 digits.\n"
 menu: .asciiz "\n--- Medical Test System Menu ---\n1. Add a new medical test\n2. Search for a test by patient ID\n3. Retrieve all up normal patient tests\n4. Retrieve all patient tests in a given specific period\n5. Search for unnormal tests\n6. Average test value\n7. Update an existing test result\n8. Delete a test\n9. Exit\nSelect an option: "
 invalidOption: .asciiz "Invalid option. Please try again.\n"
 prompt: .asciiz "Your choice: "
+
+
+menuTestNames: .asciiz "\n Select a Medical Test by entering the corresponding number:\n 1. Hemoglobin (Hgb)\n 2. Blood Glucose Test (BGT)\n 3. LDL Cholesterol (LDL)\n 4. Blood Pressure Test (BPT)\n Enter your choice: "
+
+promptInvalid: .asciiz "Invalid choice. Please try again.\n"
+
+hemoglobin: .asciiz "Hgb"
+blood_glucose_test: .asciiz "BGT"
+ldl_cholesterol: .asciiz "LDL"
+blood_pressure_test: .asciiz "BPT"
+
 
 
 completeRecord: .space 100  # Adjust based on your needs
@@ -138,17 +149,79 @@ add_test:
     
     
     #Read test name 
-   
+
+#-----------------------------------Selecting the test name--------------------------------    
+
+test_name:
+
     #promt
     li $v0, 4
-    la $a0, promptTestName
+    la $a0, menuTestNames
     syscall
 
-    #read	 	
-    li $v0, 8
-    la $a0, testName
-    li $a1, 5
+    # Read user's choice
+    li $v0, 5
     syscall
+    move $t0, $v0  # Move user's choice into $t0
+
+    # Compare user's choice and jump to the corresponding procedure
+
+    li $t1, 1
+    beq $t0, $t1, hemoglobin_label
+
+    li $t1, 2
+    beq $t0, $t1, blood_glucose_test_label
+
+    li $t1, 3
+    beq $t0, $t1, ldl_cholesterol_label
+
+    li $t1, 4
+    beq $t0, $t1, blood_pressure_test_label
+
+    # If invalid option, show error and go back to menu
+    li $v0, 4
+    la $a0, promptInvalid
+    syscall
+    j test_name
+
+    # now save the test choises in in testName buffer
+
+
+
+    hemoglobin_label:
+                la $a0, testName     # Load the address of testName buffer
+                la $a1, hemoglobin    # Load the address of "Hgb" string
+                jal copy_loop        # Copy the "Hgb" string to the testName buffer
+                j test_date          # Jump to the next step
+
+    
+    blood_glucose_test_label:
+                la $a0, testName     # Load the address of testName buffer
+                la $a1, blood_glucose_test    # Load the address of "BGT" string
+                jal copy_loop        # Copy the "BGT" string to the testName buffer
+                j test_date          # Jump to the next step
+
+
+    ldl_cholesterol_label: 
+                la $a0, testName     # Load the address of testName buffer
+                la $a1, ldl_cholesterol    # Load the address of "LDL" string
+                jal copy_loop        # Copy the "LDL" string to the testName buffer
+                j test_date          # Jump to the next step
+
+    blood_pressure_test_label:
+                la $a0, testName     # Load the address of testName buffer
+                la $a1, blood_pressure_test    # Load the address of "BPT" string
+                jal copy_loop        # Copy the "BPT" string to the testName buffer
+                j test_date          # Jump to the next step
+
+
+                     
+
+
+#-----------------------------------End of Selecting the test name--------------------------------
+
+
+test_date:
     
     # Prompt and Read Test Date
     li $v0, 4
@@ -159,7 +232,8 @@ add_test:
     la $a0, testDate
     li $a1, 9
     syscall
-    
+
+
     # Prompt the user for input
     li $v0, 4                  # Syscall for print string
     la $a0, promptTestResult             # Address of prompt string
@@ -194,7 +268,7 @@ add_test:
     li $v0, 15
     move $a0, $s7
     la $a1, testName
-    li $a2, 5               # Example length, adjust as needed
+    li $a2, 7             # Example length, adjust as needed
     syscall
 
     # Replace newline with comma in testDate if present
@@ -242,27 +316,11 @@ add_test:
 
 search_test: 
 
-    # Prompt for Patient ID
-    li $v0, 4
-    la $a0, promptID
-    syscall
 
-    # Read Patient ID as a string
-    li $v0, 8
-    la $a0, idBuffer
-    li $a1, 11 # Max length to read
-    syscall
-    
-    
-      # Validate Patient ID
-    la $a0, idBuffer # Load address of the ID buffer
-    jal validatePatientID # Jump to the validation function
 
-    # Check if ID is valid (result returned in $v0, 1 = valid, 0 = invalid)
-    li $t1, 1
-    beq $v0, $t1, validID
-    j invalidID
 
+
+   
 
 
 
@@ -412,6 +470,24 @@ check_next3:
 
 end3:
     jr $ra                    # Return from the function
+
+
+copy_loop:
+    lb $t0, 0($a1)       # Load byte from source string
+    sb $t0, 0($a0)       # Store byte in destination buffer
+    beqz $t0, add_newline # If null terminator, prepare to add newline
+    addiu $a0, $a0, 1    # Increment destination address
+    addiu $a1, $a1, 1    # Increment source address
+    j copy_loop          # Jump back to start of loop
+
+add_newline:
+    li $t1, 0x0A        # Load ASCII value of '\n'
+    sb $t1, 0($a0)      # Store newline character at the end
+    addiu $a0, $a0, 1   # Increment destination address
+    sb $zero, 0($a0)    # Add null terminator after the newline
+
+    jr $ra              # Return from function
+    
 #---------------------------------------Functions area--------------------------------------------        
 
 end:
