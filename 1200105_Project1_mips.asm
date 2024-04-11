@@ -538,15 +538,14 @@ end:
 
 
 /************************************************************
- * # Test Results File Reader
- 
+ * 
  *  .data
 filename: .asciiz "testResults.txt"
 buffer: .space 1024    # Increase buffer size if needed, but ensure it matches the read size below.
 readSize: .word 1024    # Number of bytes to read at a time; adjust as per buffer size.
 
 inputPrompt: .asciiz "\nEnter the Patient ID'): "
-inputBuffer_ID: .space 20  # Buffer for search id 
+inputBuffer_ID: .space 11  # Buffer for search id 
 .text
 .globl main
 
@@ -583,53 +582,91 @@ main:
     li $a1, 20
     syscall
 
-
+    # Search for the test ID in the buffer
 
     
+ # Initialize $t3 with 0 for summing ASCII values of inputBuffer_ID
+    li $t3, 0
+    la $a0, inputBuffer_ID
+    jal calculateSum       # Calculate sum of ASCII values in inputBuffer_ID
+    move $t5, $v0          # Move result to $t5
+
+    # Reset $t3 to 0 for use in comparing with each ID in buffer
+    li $t3, 0
+    la $a0, buffer         # Load address of the start of the buffer into $a0
+    la $t7, buffer         # Initialize $t7 with the start of the buffer
+
+loopPrintChar:
+
+    lb $a1, 0($a0)         # Load the byte at the current buffer position into $a1
+    beq $a1, ':', checkID              # If colon, check if ID matches
+
+    addu $t3, $t3, $a1     # Add the ASCII value to the sum for ID comparison
+    addiu $a0, $a0, 1      # Move to the next character in buffer
+    j loopPrintChar
+
+checkID:
+    # Compare sum of ASCII values
+    beq $t5, $t3, values_equal
+    # If not equal, find the start of the next line
+    jal findNextLine
+    j loopPrintChar
+
+values_equal:
+    # Logic for printing the data after ID match
+
+    move $a0, $t7          # Load the address of the start of the line into $a0
+    j printData
+
+findNextLine:
+    # Find the start of the next line
+    lb $a1, 0($a0)
+    beq $a1, '\0', Done_file_reading  # Check for end of buffer
+    beq $a1, '\n', end_findNextLine    # New line found, prepare to process next ID
+    addiu $a0, $a0, 1      # Move to the next character in buffer
+    j findNextLine
+end_findNextLine:
+    addiu $a0, $a0, 1      # Skip the newline character
+    li $t3, 0              # Reset the sum for next ID
+    move $t7, $a0          # Update the start of the next line
+    j loopPrintChar        # Continue with next ID
+
+printData:
+    lb $a1, 0($a0)
+    beq $a1, '\0', Done_file_reading  # Check for end of buffer
+    beq $a1, '\n', Done_file_reading  # End of data for this ID
+    move $a0, $a1
+    li $v0, 11             # syscall for printing character
+    syscall
     
-    la $a0, buffer    # Load address of the start of the buffer into $a0
-    la $t7,buffer
-
-    loopPrintchar:
-    lb $a1, 0($a0)    # Load the byte at the current buffer position into $a1
-    beq $a1,'\0', Done_file_reading # If current byte is newline, replace it
-    
-    lb $t3,0($a0)
-    lb $t4,1($a0)
-    lb $t5,2($a0)
-    lb $t6,3($a0)
-
-    move $a0,$t3
-    li $v0, 11        # syscall for printing character
-    syscall
-
-    move $a0,$t4
-    beq $a0,'\0', Done_file_reading
-    li $v0, 11        # syscall for printing character
-    syscall
-
-    move $a0,$t5
-    beq $a0,'\0', Done_file_reading
-    li $v0, 11        # syscall for printing character
-    syscall
-
-    move $a0,$t6
-    beq $a0,'\0', Done_file_reading
-    li $v0, 11        # syscall for printing character
-    syscall
-
-    addi $t7,$t7,4
-    move $a0,$t7
-    
-
-    j loopPrintchar
+    addiu $t7, $t7, 1      # Move to the next character in buffer
+    move $a0, $t7          # Load the address of the start of the line into $a0
    
-    Done_file_reading:
-    li $v0, 11        # syscall for printing character
+    j printData            # Continue printing data
+
+Done_file_reading:
+    # Placeholder for any cleanup or end of program logic
+    li $v0, 10             # syscall for exit
     syscall
-    
-    
+
+calculateSum:
+    # Input: $a0 (address of the string)
+    # Output: $v0 (sum of ASCII values)
+    li $v0, 0              # Initialize sum to 0
+sum_loop:
+    lb $t1, 0($a0)         # Load the next character
+    beq $t1, '\0', end_sum # Check for end of string
+    beq $t1, '\n', end_sum # Check for end of string
+    addu $v0, $v0, $t1     # Add character's ASCII value to sum
+    addiu $a0, $a0, 1      # Move to the next character
+    j sum_loop
+end_sum:
+    jr $ra                 # Return with sum in $v0
+
+
+     
 close_file:
+             
     # Close the file
     li $v0, 16               # sys_close
     move $a0, $s6            # File descriptor
