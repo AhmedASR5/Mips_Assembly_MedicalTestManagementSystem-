@@ -23,7 +23,7 @@ msgValid: .asciiz "\nValid ID.\n"
 msgInvalid: .asciiz "\nInvalid ID. Must be exactly 7 digits.\n"
 
 
-menu: .asciiz "\n--- Medical Test System Menu ---\n1. Add a new medical test\n2. Search for a test by patient ID\n3. Retrieve all up normal patient tests\n4. Retrieve all patient tests in a given specific period\n5. Search for unnormal tests\n6. Average test value\n7. Update an existing test result\n8. Delete a test\n9. Exit\nSelect an option: "
+menu: .asciiz "\n--- Medical Test System Menu ---\n1. Add a new medical test\n2. Retrieve all patient tests by patient ID\n3. Retrieve all up normal patient tests\n4. Retrieve all patient tests in a given specific period\n5. Search for unnormal tests\n6. Average test value\n7. Update an existing test result\n8. Delete a test\n9. Exit\nSelect an option: "
 invalidOption: .asciiz "Invalid option. Please try again.\n"
 prompt: .asciiz "Your choice: "
 
@@ -37,6 +37,10 @@ blood_glucose_test: .asciiz "BGT"
 ldl_cholesterol: .asciiz "LDL"
 blood_pressure_test: .asciiz "BPT"
 
+inputPrompt: .asciiz "\nEnter the Test ID (followed by ':'): "
+inputBuffer: .space 20  # Buffer for input string
+testFoundMsg: .asciiz "Test found.\n"
+testNotFoundMsg: .asciiz "Test not found.\n"
 
 
 completeRecord: .space 100  # Adjust based on your needs
@@ -316,12 +320,16 @@ test_date:
 
 search_test: 
 
+  # Prompt user for the test ID
+    li $v0, 4
+    la $a0, inputPrompt
+    syscall
 
-
-
-
-   
-
+    # Read the test ID as a string
+    li $v0, 8
+    la $a0, inputBuffer
+    li $a1, 20
+    syscall
 
 
 
@@ -348,13 +356,7 @@ update_existing_test_result:
 delete_test:
     j menu_loop
 
-
-
-
-
-
-
-    
+ 
 #---------------------------------------Functions area--------------------------------------------
 validID:
     li $v0, 4
@@ -487,10 +489,166 @@ add_newline:
     sb $zero, 0($a0)    # Add null terminator after the newline
 
     jr $ra              # Return from function
+
+
+#------------------- stringToInt function -------------------
+stringToInt:
+    li $v0, 0            # Initialize result to 0
+    li $t1, 0            # Counter for number of digits processed
     
+processLoop:
+    lb $t2, 0($a0)       # Load the current character from the string
+    beq $t2, '\n', endLoop  # If we reach the end of the string, end loop
+    beq $t2, ':', endLoop    # If we reach ':', end loop
+    
+    sub $t2, $t2, '0'    # Convert ASCII to integer ('0' -> 0, '1' -> 1, ..., '9' -> 9)
+    
+    # Ensure the character is a digit
+    bltz $t2, invalidInput   # If $t2 is negative, it's not a digit
+    li $t3, 9
+    bgt $t2, $t3, invalidInput # If $t2 is greater than 9, it's not a digit
+    
+    mul $v0, $v0, 10     # Multiply current result by 10
+    add $v0, $v0, $t2    # Add the new digit to the result
+    
+    addiu $a0, $a0, 1    # Move to the next character in the string
+    addiu $t1, $t1, 1    # Increment digit counter
+    j processLoop
+    
+endLoop:
+    jr $ra  # Return with valid input
+
+invalidInput:
+    li $v0, 4    # Print error message
+    la $a0, errorMessage
+    syscall
+    
+    li $v0, 0    # Set return value to 0 to indicate an error
+    jr $ra  # Return after handling invalid input
+
+
+#------------------- end stringToFloat function -------------------
+
 #---------------------------------------Functions area--------------------------------------------        
 
 end:
     # Exit program
     li $v0, 10
     syscall
+
+
+/************************************************************
+ * # Test Results File Reader
+ 
+ *  .data
+filename: .asciiz "testResults.txt"
+buffer: .space 1024    # Increase buffer size if needed, but ensure it matches the read size below.
+readSize: .word 1024    # Number of bytes to read at a time; adjust as per buffer size.
+
+inputPrompt: .asciiz "\nEnter the Patient ID'): "
+inputBuffer_ID: .space 20  # Buffer for search id 
+.text
+.globl main
+
+main:
+    # Open the file for reading
+    li $v0, 13               # sys_open
+    la $a0, filename         # Pointer to the filename
+    li $a1, 0                # Flag for reading
+    syscall
+    move $s6, $v0            # Save the file descriptor
+
+    # Check for successful file opening
+    bltz $s6, error_open
+
+
+    li $v0, 14               # sys_read
+    move $a0, $s6            # File descriptor
+    la $a1, buffer           # Pointer to the buffer
+    lw $a2, readSize         # Number of bytes to read
+    syscall
+
+    move $t1, $v0            # Store the number of bytes read in $t1
+    beqz $v0, close_file     # If no bytes were read, end of file has been reached
+
+
+  # Prompt user for the test ID
+    li $v0, 4
+    la $a0, inputPrompt
+    syscall
+
+    # Read the test ID as a string
+    li $v0, 8
+    la $a0, inputBuffer_ID
+    li $a1, 20
+    syscall
+
+
+
+    
+    
+    la $a0, buffer    # Load address of the start of the buffer into $a0
+    la $t7,buffer
+
+    loopPrintchar:
+    lb $a1, 0($a0)    # Load the byte at the current buffer position into $a1
+    beq $a1,'\0', Done_file_reading # If current byte is newline, replace it
+    
+    lb $t3,0($a0)
+    lb $t4,1($a0)
+    lb $t5,2($a0)
+    lb $t6,3($a0)
+
+    move $a0,$t3
+    li $v0, 11        # syscall for printing character
+    syscall
+
+    move $a0,$t4
+    beq $a0,'\0', Done_file_reading
+    li $v0, 11        # syscall for printing character
+    syscall
+
+    move $a0,$t5
+    beq $a0,'\0', Done_file_reading
+    li $v0, 11        # syscall for printing character
+    syscall
+
+    move $a0,$t6
+    beq $a0,'\0', Done_file_reading
+    li $v0, 11        # syscall for printing character
+    syscall
+
+    addi $t7,$t7,4
+    move $a0,$t7
+    
+
+    j loopPrintchar
+   
+    Done_file_reading:
+    li $v0, 11        # syscall for printing character
+    syscall
+    
+    
+close_file:
+    # Close the file
+    li $v0, 16               # sys_close
+    move $a0, $s6            # File descriptor
+    syscall
+
+    # Exit the program
+    li $v0, 10               # sys_exit
+    syscall
+
+error_open:
+    li $v0, 4                # sys_write (print_string)
+    la $a0, error_msg        # Pointer to the error message
+    syscall
+
+    li $v0, 10               # sys_exit
+    syscall
+
+.data
+error_msg: .asciiz "Failed to open the file.\n"
+
+ * 
+ * **********************************************************/
