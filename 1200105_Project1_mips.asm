@@ -1,6 +1,7 @@
 .data
 
 filename: .asciiz "testResults.txt"
+
 openFlags: .word 0x0001       # Flag for write and create
 mode: .word 0x01B6            # Mode for file permissions (0644)
 
@@ -37,37 +38,28 @@ blood_glucose_test: .asciiz "BGT"
 ldl_cholesterol: .asciiz "LDL"
 blood_pressure_test: .asciiz "BPT"
 
-inputPrompt: .asciiz "\nEnter the Test ID (followed by ':'): "
-inputBuffer: .space 20  # Buffer for input string
-testFoundMsg: .asciiz "Test found.\n"
-testNotFoundMsg: .asciiz "Test not found.\n"
 
 
 completeRecord: .space 100  # Adjust based on your needs
 delimiter: .asciiz ", "
 newline: .asciiz "\n"
 
+
+# for search test by ID ---------------------
+
+buffer: .space 1024    # Increase buffer size if needed, but ensure it matches the read size below.
+readSize: .word 2024    # Number of bytes to read at a time; adjust as per buffer size.
+
+inputPrompt: .asciiz "\nEnter the Patient ID'): "
+inputBuffer_ID: .space 11  # Buffer for search id 
+error_msg: .asciiz "Failed to open the file.\n"
+
+#end of search test by ID ---------------------
+
 .text
 .globl main
 
 main:
-
-
-#----------------------------------------Opening the file for writing----------------------------------------
-
-# Open the file for writing
-    li $v0, 13                 # Syscall: open file
-    la $a0, filename           # Filename: pointer to "testResults.txt"
-    lw  $a1, openFlags          # Flags: write and create
-    lw  $a2, mode               # Mode: file permissions
-    syscall
-    move $s7, $v0              # Save the file descriptor to $s7
-  
-
-#---------------------------------------- End of Opening the file for writing--------------------------------
-
-
-
 
 #----------------------------------------Menu--------------------------------     
 
@@ -127,6 +119,24 @@ exit_program:
 #----------------------------------------Getting information from the user (Add test) --------------------------------
 
 add_test:
+
+
+
+#----------------------------------------Opening the file for writing----------------------------------------
+
+# Open the file for writing
+
+    # Open the file for writing
+    li $v0, 13                 # Syscall: open file
+    la $a0, filename           # Filename: pointer to "testResults.txt"
+    lw $a1, openFlags          # Flags: write only
+    syscall
+    move $s7, $v0              # Save the file descriptor to $s7
+    
+    # Check if file opened successfully
+    bltz $s7, open_failed  
+
+#---------------------------------------- End of Opening the file for writing--------------------------------
 
     # Prompt for Patient ID
     li $v0, 4
@@ -307,18 +317,54 @@ test_date:
     syscall
 
 
+ # Close the file
+    li $v0, 16                 # Syscall: close file
+    move $a0, $s7              # File descriptor
+    syscall
+    
 #-----------------------------------End of writing the information to the file--------------------------------
 
 
     # Return to the menu
     j menu_loop
+    
+    
+  open_failed:
+    # Handle file open failure
+    li $v0, 10                 # Exit if failed to open
+    syscall
 
-  
 
 
 #------------------------------------Getting information from the user----------------------------  
 
 search_test: 
+
+   # Close the file if the search opend at first by user
+    li $v0, 16                 # Syscall: close file
+    move $a0, $s7              # File descriptor
+    syscall
+    
+   # Open the file for reading
+    li $v0, 13               # sys_open
+    la $a0, filename         # Pointer to the filename
+    li $a1, 0                # Flag for reading
+    syscall
+    move $s6, $v0            # Save the file descriptor
+
+    # Check for successful file opening
+    bltz $s6, error_open
+
+
+    li $v0, 14               # sys_read
+    move $a0, $s6            # File descriptor
+    la $a1, buffer           # Pointer to the buffer
+    lw $a2, readSize         # Number of bytes to read
+    syscall
+
+    move $t1, $v0            # Store the number of bytes read in $t1
+    beqz $v0, close_file     # If no bytes were read, end of file has been reached
+
 
   # Prompt user for the test ID
     li $v0, 4
@@ -327,9 +373,127 @@ search_test:
 
     # Read the test ID as a string
     li $v0, 8
-    la $a0, inputBuffer
+    la $a0, inputBuffer_ID
     li $a1, 20
     syscall
+
+    # Search for the test ID in the buffer
+
+    
+ # Initialize $t3 with 0 for summing ASCII values of inputBuffer_ID
+    li $t3, 0
+    la $a0, inputBuffer_ID
+    jal calculateSum       # Calculate sum of ASCII values in inputBuffer_ID
+    move $t5, $v0          # Move result to $t5
+
+    # Reset $t3 to 0 for use in comparing with each ID in buffer
+    li $t3, 0
+    la $a0, buffer         # Load address of the start of the buffer into $a0
+    la $t7, buffer         # Initialize $t7 with the start of the buffer
+
+loopPrintChar:
+
+    lb $a1, 0($a0)         # Load the byte at the current buffer position into $a1
+    beq $a1, ':', checkID              # If colon, check if ID matches
+
+    addu $t3, $t3, $a1     # Add the ASCII value to the sum for ID comparison
+    addiu $a0, $a0, 1      # Move to the next character in buffer
+    j loopPrintChar
+
+checkID:
+    
+    beq $t5, $t3, values_equal # Compare sum of ASCII values
+    # If not equal, find the start of the next line
+    jal findNextLine
+    j loopPrintChar
+
+values_equal:
+    # Logic for printing the data after ID match
+
+    move $a0, $t7          # Load the address of the start of the line into $a0
+    j printData
+
+findNextLine:
+
+    # Find the start of the next line
+    lb $a1, 0($a0)
+    beq $a1, '\n', end_findNextLine    # New line found, prepare to process next ID
+    addiu $a0, $a0, 1      # Move to the next character in buffer
+    
+    lb $a1, 0($a0)
+    beq $a1, '\0', Done_file_reading  # Check for end of buffer
+    
+    j findNextLine
+    
+end_findNextLine:
+    addiu $a0, $a0, 1      # Skip the newline character
+    li $t3, 0              # Reset the sum for next ID
+    move $t7, $a0          # Update the start of the next line
+    j loopPrintChar        # Continue with next ID
+
+printData:
+    lb $a1, 0($a0)
+    beq $a1, '\n', GoNextLine  # End of data for this ID
+    move $a0, $a1
+    li $v0, 11             # syscall for printing character
+    syscall
+    
+    addiu $t7, $t7, 1      # Move to the next character in buffer
+    move $a0, $t7          # Load the address of the start of the line into $a0
+   
+    j printData            # Continue printing data
+
+
+    
+GoNextLine:
+    move $a0, $a1
+    li $v0, 11             # syscall for printing character
+    syscall
+    addiu $t7, $t7, 1
+    move $a0, $t7 
+    li $t3, 0              # Reset the sum for next ID
+    lb $a1, 0($a0)
+    beq $a1, '\0', Done_file_reading  # Check for end of buffer
+     
+ j loopPrintChar
+
+
+Done_file_reading:
+     j menu_loop
+     
+     
+calculateSum:
+    # Input: $a0 (address of the string)
+    # Output: $v0 (sum of ASCII values)
+    li $v0, 0              # Initialize sum to 0
+sum_loop:
+    lb $t1, 0($a0)         # Load the next character
+    beq $t1, '\0', end_sum # Check for end of string
+    beq $t1, '\n', end_sum # Check for end of string
+    addu $v0, $v0, $t1     # Add character's ASCII value to sum
+    addiu $a0, $a0, 1      # Move to the next character
+    j sum_loop
+end_sum:
+    jr $ra                 # Return with sum in $v0
+
+
+error_open:
+    li $v0, 4                # sys_write (print_string)
+    la $a0, error_msg        # Pointer to the error message
+    syscall
+
+    li $v0, 10               # sys_exit
+    syscall
+
+
+close_file:
+             
+    # Close the file
+    li $v0, 16               # sys_close
+    move $a0, $s6            # File descriptor
+    syscall
+
+j menu_loop
 
 
 
@@ -490,37 +654,9 @@ add_newline:
 
     jr $ra              # Return from function
 
-
-#------------------- stringToInt function -------------------
-stringToInt:
-    li $v0, 0            # Initialize result to 0
-    li $t1, 0            # Counter for number of digits processed
-    
-processLoop:
-    lb $t2, 0($a0)       # Load the current character from the string
-    beq $t2, '\n', endLoop  # If we reach the end of the string, end loop
-    beq $t2, ':', endLoop    # If we reach ':', end loop
-    
-    sub $t2, $t2, '0'    # Convert ASCII to integer ('0' -> 0, '1' -> 1, ..., '9' -> 9)
-    
-    # Ensure the character is a digit
-    bltz $t2, invalidInput   # If $t2 is negative, it's not a digit
-    li $t3, 9
-    bgt $t2, $t3, invalidInput # If $t2 is greater than 9, it's not a digit
-    
-    mul $v0, $v0, 10     # Multiply current result by 10
-    add $v0, $v0, $t2    # Add the new digit to the result
-    
-    addiu $a0, $a0, 1    # Move to the next character in the string
-    addiu $t1, $t1, 1    # Increment digit counter
-    j processLoop
-    
-endLoop:
-    jr $ra  # Return with valid input
-
 invalidInput:
     li $v0, 4    # Print error message
-    la $a0, errorMessage
+    la $a0, error_msg
     syscall
     
     li $v0, 0    # Set return value to 0 to indicate an error
@@ -536,156 +672,3 @@ end:
     li $v0, 10
     syscall
 
-
-/************************************************************
- * 
- *  .data
-filename: .asciiz "testResults.txt"
-buffer: .space 1024    # Increase buffer size if needed, but ensure it matches the read size below.
-readSize: .word 1024    # Number of bytes to read at a time; adjust as per buffer size.
-
-inputPrompt: .asciiz "\nEnter the Patient ID'): "
-inputBuffer_ID: .space 11  # Buffer for search id 
-.text
-.globl main
-
-main:
-    # Open the file for reading
-    li $v0, 13               # sys_open
-    la $a0, filename         # Pointer to the filename
-    li $a1, 0                # Flag for reading
-    syscall
-    move $s6, $v0            # Save the file descriptor
-
-    # Check for successful file opening
-    bltz $s6, error_open
-
-
-    li $v0, 14               # sys_read
-    move $a0, $s6            # File descriptor
-    la $a1, buffer           # Pointer to the buffer
-    lw $a2, readSize         # Number of bytes to read
-    syscall
-
-    move $t1, $v0            # Store the number of bytes read in $t1
-    beqz $v0, close_file     # If no bytes were read, end of file has been reached
-
-
-  # Prompt user for the test ID
-    li $v0, 4
-    la $a0, inputPrompt
-    syscall
-
-    # Read the test ID as a string
-    li $v0, 8
-    la $a0, inputBuffer_ID
-    li $a1, 20
-    syscall
-
-    # Search for the test ID in the buffer
-
-    
- # Initialize $t3 with 0 for summing ASCII values of inputBuffer_ID
-    li $t3, 0
-    la $a0, inputBuffer_ID
-    jal calculateSum       # Calculate sum of ASCII values in inputBuffer_ID
-    move $t5, $v0          # Move result to $t5
-
-    # Reset $t3 to 0 for use in comparing with each ID in buffer
-    li $t3, 0
-    la $a0, buffer         # Load address of the start of the buffer into $a0
-    la $t7, buffer         # Initialize $t7 with the start of the buffer
-
-loopPrintChar:
-
-    lb $a1, 0($a0)         # Load the byte at the current buffer position into $a1
-    beq $a1, ':', checkID              # If colon, check if ID matches
-
-    addu $t3, $t3, $a1     # Add the ASCII value to the sum for ID comparison
-    addiu $a0, $a0, 1      # Move to the next character in buffer
-    j loopPrintChar
-
-checkID:
-    # Compare sum of ASCII values
-    beq $t5, $t3, values_equal
-    # If not equal, find the start of the next line
-    jal findNextLine
-    j loopPrintChar
-
-values_equal:
-    # Logic for printing the data after ID match
-
-    move $a0, $t7          # Load the address of the start of the line into $a0
-    j printData
-
-findNextLine:
-    # Find the start of the next line
-    lb $a1, 0($a0)
-    beq $a1, '\0', Done_file_reading  # Check for end of buffer
-    beq $a1, '\n', end_findNextLine    # New line found, prepare to process next ID
-    addiu $a0, $a0, 1      # Move to the next character in buffer
-    j findNextLine
-end_findNextLine:
-    addiu $a0, $a0, 1      # Skip the newline character
-    li $t3, 0              # Reset the sum for next ID
-    move $t7, $a0          # Update the start of the next line
-    j loopPrintChar        # Continue with next ID
-
-printData:
-    lb $a1, 0($a0)
-    beq $a1, '\0', Done_file_reading  # Check for end of buffer
-    beq $a1, '\n', Done_file_reading  # End of data for this ID
-    move $a0, $a1
-    li $v0, 11             # syscall for printing character
-    syscall
-    
-    addiu $t7, $t7, 1      # Move to the next character in buffer
-    move $a0, $t7          # Load the address of the start of the line into $a0
-   
-    j printData            # Continue printing data
-
-Done_file_reading:
-    # Placeholder for any cleanup or end of program logic
-    li $v0, 10             # syscall for exit
-    syscall
-
-calculateSum:
-    # Input: $a0 (address of the string)
-    # Output: $v0 (sum of ASCII values)
-    li $v0, 0              # Initialize sum to 0
-sum_loop:
-    lb $t1, 0($a0)         # Load the next character
-    beq $t1, '\0', end_sum # Check for end of string
-    beq $t1, '\n', end_sum # Check for end of string
-    addu $v0, $v0, $t1     # Add character's ASCII value to sum
-    addiu $a0, $a0, 1      # Move to the next character
-    j sum_loop
-end_sum:
-    jr $ra                 # Return with sum in $v0
-
-
-     
-close_file:
-             
-    # Close the file
-    li $v0, 16               # sys_close
-    move $a0, $s6            # File descriptor
-    syscall
-
-    # Exit the program
-    li $v0, 10               # sys_exit
-    syscall
-
-error_open:
-    li $v0, 4                # sys_write (print_string)
-    la $a0, error_msg        # Pointer to the error message
-    syscall
-
-    li $v0, 10               # sys_exit
-    syscall
-
-.data
-error_msg: .asciiz "Failed to open the file.\n"
-
- * 
- * **********************************************************/
