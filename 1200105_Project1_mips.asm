@@ -565,9 +565,7 @@ average_test_value:
 
    get_values_from_line:
 
-                     j line_test_values # Jump to the line_test_values label
-
-            return_values:
+            jal line_test_values # Jump to the line_test_values label
 
             #-----------------------------------sum the values of the test result to calculate the average--------------------------------
 
@@ -878,8 +876,6 @@ end_sum:
 # t4 = 1 means Hgb, t4 = 2 means BGT, t4 = 3 means LDL, t4 = 4 means BPT
 # s1 = count of Hgp, s2 = count of BGT, s3 = count of LDL, s4 = count of BPT  ,in the buffer
 
-# at the end of the function change "return_values" to "branch you want to go to and get values and start the next line"
-
 
 line_test_values:
 
@@ -888,6 +884,8 @@ line_test_values:
     # .data section : outputString: .space 50  # Allocate space for the output string
 
     li $t2, 0 # rest the value of asscii sum.
+
+    move $t8, $ra # save the return address
 
 
 find_semicolon:
@@ -1031,17 +1029,18 @@ ReturnValues:
 
 doneConvertion:
 
+                move $ra, $t8 # restore the return address
                 addiu $t7, $t7, 1 # Move to the next line 
                 move $a0, $t7    # Move to the next line stored in a0 as return value
                 li $t2, 0              # Reset the sum for next ID
                 lb $a1, 0($a0)
                 beq $a1, '\0', buffer_done # Check for end of buffer
                 li $s7, 0 # set the value of s6 to 0 to indicate that the buffer is not done.
-                j return_values # choose the function  the main function to return and get the values
+                jr $ra
 
                 buffer_done:
                 li $s7, 1 # set the value of s6 to 1 to indicate that the buffer is done
-                j return_values #choose the function  the main function to return and get the values
+                jr $ra
                
 
 
