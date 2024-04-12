@@ -56,6 +56,23 @@ error_msg: .asciiz "Failed to open the file.\n"
 
 #end of search test by ID ---------------------
 
+
+# for average test value ---------------------
+
+outputString: .space 50  # Allocate space for the output string
+semicolonCount: .word 0  # Counter for the number of semicolons
+
+integerPart: .word 0       # Space for the integer part
+fractionalPart: .word 0    # Space for the fractional part as an integer
+scale: .word 1             # Scale
+
+messageHgb: .asciiz "Average Hgb: "
+messageBGT: .asciiz "Average BGT: "
+messageLDL: .asciiz "Average LDL: "
+messageBPT: .asciiz "Average BPT: "
+
+#end of average test value ---------------------
+
 .text
 .globl main
 
@@ -442,8 +459,6 @@ printData:
     move $a0, $t7          # Load the address of the start of the line into $a0
    
     j printData            # Continue printing data
-
-
     
 GoNextLine:
     move $a0, $a1
@@ -510,7 +525,250 @@ search_unnormal_tests:
 
 
 average_test_value:
-    j menu_loop
+
+   # choosing the reg s0 to s3 to save the count of each test result
+    li $s1, 0 # for count of Hgb
+    li $s2, 0 # for count of BGT
+    li $s3, 0 # for count of LDL
+    li $s4, 0 # for count of BPT
+
+    li.s $f20, 0.0 # for sum of Hgb
+    li.s $f21, 0.0 # for sum of BGT
+    li.s $f22, 0.0 # for sum of LDL
+    li.s $f23, 0.0 # for sum of BPT
+
+   # Close the file if the search opend at first by user
+    li $v0, 16                 # Syscall: close file
+    move $a0, $s7              # File descriptor
+    syscall
+    
+   # Open the file for reading
+    li $v0, 13               # sys_open
+    la $a0, filename         # Pointer to the filename
+    li $a1, 0                # Flag for reading
+    syscall
+    move $s6, $v0            # Save the file descriptor
+
+    # Check for successful file opening
+    bltz $s6, error_open
+
+
+    li $v0, 14               # sys_read
+    move $a0, $s6            # File descriptor
+    la $a1, buffer           # Pointer to the buffer
+    lw $a2, readSize         # Number of bytes to read
+    syscall
+
+    move $t1, $v0            # Store the number of bytes read in $t1
+    beqz $v0, close_file     # If no bytes were read, end of file has been reached
+
+
+
+#-----------------------------------Getting the floating-point values from the file--------------------------------
+
+    la $a0, buffer         # Load address of the start of the buffer into $a0
+    la $t7, buffer         # Initialize $t7 with the start of the buffer
+    la $a1, outputString   # Load address of the output string into $a1
+    lw $t2, semicolonCount # Load the initial value of the semicolon counter into $t2
+
+find_semicolon:
+
+    lb $t0, 0($a0)        # Load the next character from the input string into $t0
+    beq $t0, ':', determine_test_name # If colon, check if ID matches
+    li $t1, ','           # Load the ASCII value of semicolon into $t1
+    beq $t0, $t1, increment_counter # If the current character is a semicolon, increment the counter
+    addiu $a0, $a0, 1     # Move to the next character in the input string
+    j find_semicolon      # Jump back to the start of the loop
+
+increment_counter:
+    addiu $t2, $t2, 1     # Increment the semicolon counter
+    sw $t2, semicolonCount # Store the updated counter
+    addiu $a0, $a0, 1     # Move past the semicolon
+    li $t3, 2             # We're looking for the second semicolon
+    beq $t2, $t3, start_copying # If we've found two semicolons, start copying
+    j find_semicolon      # Otherwise, keep looking for semicolons
+
+start_copying:
+
+    lb $t0, 0($a0)        # Load the next character from the input string into $t0
+    beq $t0, ' ', skipSpace # Check for the space character
+    beq $t0, '\n', continueToSecondLine # Check for the end of the line
+
+    sb $t0, 0($a1)        # Store the character in the output string
+    addiu $a0, $a0, 1     # Move to the next character in the input string
+    addiu $a1, $a1, 1     # Move to the next position in the output string
+    j start_copying       # Jump back to the start of the copy loop
+
+skipSpace:
+    addiu $a0, $a0, 1     # Move to the next character in the input string
+   j start_copying
+
+continueToSecondLine:
+
+            move $t7, $a0          # save the start of the next line
+            sb $t0, 0($a1)        # Store \n in the output string for use it for termination
+
+
+            #before going to the next line, we need to sum the values of the test result to calculate the average
+
+            #-----------------------------------sum the values of the test result to calculate the average--------------------------------
+
+            beq $t4, 1, Hgb_test_sum
+            beq $t4, 2, BGT_test_sum
+            beq $t4, 3, LDL_test_sum
+            beq $t4, 4, BPT_test_sum
+
+            Hgb_test_sum:
+                        la $a0, outputString   # Load address of the output string into $a0
+                        jal parseString        # Jump to the string parsing function
+                        jal convertPartsToFloatAndPrint
+                        add.s $f20, $f20, $f1
+
+
+            BGT_test_sum:
+                        la $a0, outputString   # Load address of the output string into $a0
+                        jal parseString        # Jump to the string parsing function
+                        jal convertPartsToFloatAndPrint
+                        add.s $f21, $f21, $f1            
+
+
+            LDL_test_sum:
+                        la $a0, outputString   # Load address of the output string into $a0
+                        jal parseString        # Jump to the string parsing function
+                        jal convertPartsToFloatAndPrint
+                        add.s $f22, $f22, $f1
+
+            BPT_test_sum: 
+                        la $a0, outputString   # Load address of the output string into $a0
+                        jal parseString        # Jump to the string parsing function
+                        jal convertPartsToFloatAndPrint
+                        add.s $f23, $f23, $f1
+                                     
+
+#-----------------------------------End of sum the values of the test result to calculate the average--------------------------
+
+
+
+                addiu $t7, $t7, 1
+                move $a0, $t7 
+                li $t2, 0              # Reset the sum for next ID
+                lb $a1, 0($a0)
+                beq $a1, '\0', find_the_avg  # Check for end of buffer
+                
+            j find_semicolon
+
+
+find_the_avg:
+            # Convert count from integer to floating-point
+            mtc1 $s1, $f12  # Convert Hgb count to floating-point
+            cvt.s.w $f12, $f12
+            mtc1 $s2, $f13  # Convert BGT count to floating-point
+            cvt.s.w $f13, $f13
+            mtc1 $s3, $f14  # Convert LDL count to floating-point
+            cvt.s.w $f14, $f14
+            mtc1 $s4, $f15  # Convert BPT count to floating-point
+            cvt.s.w $f15, $f15
+
+            # Divide sum by count to find the average
+            div.s $f12, $f20, $f12  # Average for Hgb
+            div.s $f13, $f21, $f13  # Average for BGT
+            div.s $f14, $f22, $f14  # Average for LDL
+            div.s $f15, $f23, $f15  # Average for BPT
+
+            # Print each average
+            li $v0, 4
+            la $a0, messageHgb
+            syscall
+            mov.s $f12, $f12  # Load average Hgb for printing
+            li $v0, 2         # Print float
+            syscall
+
+            li $v0, 4
+            la $a0, messageBGT
+            syscall
+            mov.s $f12, $f13  # Load average BGT for printing
+            syscall
+
+            li $v0, 4
+            la $a0, messageLDL
+            syscall
+            mov.s $f12, $f14  # Load average LDL for printing
+            syscall
+
+            li $v0, 4
+            la $a0, messageBPT
+            syscall
+            mov.s $f12, $f15  # Load average BPT for printing
+            syscall
+
+            j menu_loop
+               
+
+# -----------------------------------Get return uniqe value in t4 according to the test name-------------------------------- 
+ determine_test_name:
+
+  addiu $a0, $a0, 1      # Skip the newline character
+  move $t7, $a0          # Update the start of the next line 
+   
+  lb $t0, 0($a0)        # Load the next character from the input string into $t0
+  beq $t0, ' ', determine_test_name # Check for the end of the string
+  
+  # sum the ascii values of the test name to choose the test value to calculate the average
+
+    li $t3, 0
+    addu $t3, $t3, $t0     # Add the ASCII value to the sum for test name comparison
+    beq $t0, ',', get_type_of_test # If colon, have unique value for each test name 
+
+    jal determine_test_name 
+
+
+get_type_of_test:
+
+    addiu $t2, $t2, 1     # Increment the semicolon counter
+    sw $t2, semicolonCount # Store the updated counter
+
+     # Check the sum of the ASCII values to determine the test name
+
+    li $t1, 0x111        # ASCII sum for "Hgb"
+    beq $t3, $t1, Hgb_test # If the sum matches "Hgb", jump to Hgb_test
+
+    li $t1, 0xDD         #  ASCII sum for "BGT"
+    beq $t3, $t1, BGT_test # If the sum matches "BGT", jump to BGT_test
+
+    li $t1, 0x134        #  ASCII sum for "LDL"
+    beq $t3, $t1, LDL_test # If the sum matches "LDL", jump to LDL_test
+
+    li $t1, 0xE6         #  ASCII sum for "BPT"
+    beq $t3, $t1, BPT_test # If the sum matches "BPT", jump to BPT_test
+
+#return unique value for each test name
+
+    Hgb_test:
+        li $t4, 1
+        addiu $s1, $s1, 1
+        j find_semicolon
+
+    BGT_test:
+        li $t4, 2
+        addiu $s2, $s2, 1
+        j find_semicolon
+
+    LDL_test:
+        li $t4, 3
+        addiu $s3, $s3, 1
+        j find_semicolon
+
+    BPT_test:
+        li $t4, 4
+        addiu $s4, $s4, 1
+        j find_semicolon    
+
+
+#-----------------------------------end of Get return uniqe value in t4 according to the test name------------------------
+
+
+
+#----------------------------------------------end of get average test value-----------------------------------------------
 
 
 update_existing_test_result:
@@ -663,7 +921,74 @@ invalidInput:
     jr $ra  # Return after handling invalid input
 
 
-#------------------- end stringToFloat function -------------------
+
+#-------------------------------------string to float conversion --------------------------------------------
+
+parseString:
+    # Initialize variables
+    li $t1, 0              # Will hold the integer part
+    li $t2, 0              # Will hold the fractional part
+    li $t3, 1              # Will be used for the scale
+    
+    # Parse the integer part
+parseInteger:
+    lb $t0, 0($a0)         # Load the next byte (character) from the string
+    beq $t0, '.', endInteger # Check for decimal point
+    beq $t0, '\0', endInteger # Check for null terminator
+    
+    sub $t0, $t0, '0'      # Convert from ASCII to integer
+    mul $t1, $t1, 10       # Multiply current result by 10
+    add $t1, $t1, $t0      # Add the new digit
+    
+    addiu $a0, $a0, 1      # Move to the next character
+    j parseInteger         # Loop back
+
+endInteger:
+    sw $t1, integerPart    # Store the integer part
+    addiu $a0, $a0, 1      # Move past the decimal point
+
+    # Parse the fractional part
+parseFractional:
+    lb $t0, 0($a0)         # Load the next byte (character)
+    beq $t0, '\0', endFractional # Check for null terminator
+    
+    sub $t0, $t0, '0'      # Convert from ASCII to integer
+    mul $t2, $t2, 10       # Multiply current result by 10
+    add $t2, $t2, $t0      # Add the new digit
+    
+    mul $t3, $t3, 10       # Increase scale
+    addiu $a0, $a0, 1      # Move to the next character
+    j parseFractional      # Loop back
+
+endFractional:
+    sw $t2, fractionalPart # Store the fractional part
+    sw $t3, scale          # Store the scale
+    jr $ra                 # Return
+
+# Function to convert the parts to floating point and print
+convertPartsToFloatAndPrint:
+    # Load and convert integer part
+    lw $s0, integerPart
+    mtc1 $s0, $f1
+    cvt.s.w $f1, $f1
+
+    # Load and convert fractional part
+    lw $s0, fractionalPart
+    mtc1 $s0, $f2
+    cvt.s.w $f2, $f2
+
+    # Load and convert scale
+    lw $s0, scale
+    mtc1 $s0, $f3
+    cvt.s.w $f3, $f3
+
+    # Divide fractional part by scale
+    div.s $f2, $f2, $f3
+
+    # Combine integer and fractional parts
+    add.s $f1, $f1, $f2
+
+#---------------------------------------End of string to float conversion--------------------------------------------
 
 #---------------------------------------Functions area--------------------------------------------        
 
