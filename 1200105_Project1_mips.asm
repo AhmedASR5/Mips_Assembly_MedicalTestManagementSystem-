@@ -480,42 +480,9 @@ Done_file_reading:
      j menu_loop
      
      
-calculateSum:
-    # Input: $a0 (address of the string)
-    # Output: $v0 (sum of ASCII values)
-    li $v0, 0              # Initialize sum to 0
-sum_loop:
-    lb $t1, 0($a0)         # Load the next character
-    beq $t1, '\0', end_sum # Check for end of string
-    beq $t1, '\n', end_sum # Check for end of string
-    addu $v0, $v0, $t1     # Add character's ASCII value to sum
-    addiu $a0, $a0, 1      # Move to the next character
-    j sum_loop
-end_sum:
-    jr $ra                 # Return with sum in $v0
-
-
-error_open:
-    li $v0, 4                # sys_write (print_string)
-    la $a0, error_msg        # Pointer to the error message
-    syscall
-
-    li $v0, 10               # sys_exit
-    syscall
-
-
-close_file:
-             
-    # Close the file
-    li $v0, 16               # sys_close
-    move $a0, $s6            # File descriptor
-    syscall
-
-j menu_loop
-
-
 
 retrieve_all_up_normal_tests:
+
     j menu_loop
 
 
@@ -577,45 +544,30 @@ average_test_value:
     la $a1, outputString   # Load address of the output string into $a1
     lw $t2, semicolonCount # Load the initial value of the semicolon counter into $t2
 
-find_semicolon:
-
-    lb $t0, 0($a0)        # Load the next character from the input string into $t0
-    beq $t0, ':', determine_test_name # If colon, check if ID matches
-    li $t1, ','           # Load the ASCII value of semicolon into $t1
-    beq $t0, $t1, increment_counter # If the current character is a semicolon, increment the counter
-    addiu $a0, $a0, 1     # Move to the next character in the input string
-    j find_semicolon      # Jump back to the start of the loop
-
-increment_counter:
-    addiu $t2, $t2, 1     # Increment the semicolon counter
-    sw $t2, semicolonCount # Store the updated counter
-    addiu $a0, $a0, 1     # Move past the semicolon
-    li $t3, 2             # We're looking for the second semicolon
-    beq $t2, $t3, start_copying # If we've found two semicolons, start copying
-    j find_semicolon      # Otherwise, keep looking for semicolons
-
-start_copying:
-
-    lb $t0, 0($a0)        # Load the next character from the input string into $t0
-    beq $t0, ' ', skipSpace # Check for the space character
-    beq $t0, '\n', continueToSecondLine # Check for the end of the line
-
-    sb $t0, 0($a1)        # Store the character in the output string
-    addiu $a0, $a0, 1     # Move to the next character in the input string
-    addiu $a1, $a1, 1     # Move to the next position in the output string
-    j start_copying       # Jump back to the start of the copy loop
-
-skipSpace:
-    addiu $a0, $a0, 1     # Move to the next character in the input string
-   j start_copying
-
-continueToSecondLine:
-
-            move $t7, $a0          # save the start of the next line
-            sb $t0, 0($a1)        # Store \n in the output string for use it for termination
 
 
-            #before going to the next line, we need to sum the values of the test result to calculate the average
+#line_test_values: 
+
+# this function retrun the float value of the test result in F1 and the type of the test in t4
+#and also a0 will be the start of the next line. if there no next line 
+
+
+#example 
+# 1200105:LDL, 2002-22, 6.0 line 
+
+# F(a0)  Return --> F1 = 6.0 (float point) , t4 = 3 (type of test = LDL) , a0 = start of the next line
+# s1 = 0, s2 = 0, s3 = 1, s4 = 0 (count of each test result) in the buffer   
+# s7 = 0 means a0 has new line address and the buffer not end , s7 = 1 means the buffer end. and no more lines.
+
+# t4 = 1 means Hgb, t4 = 2 means BGT, t4 = 3 means LDL, t4 = 4 means BPT
+# s1 = count of Hgp, s2 = count of BGT, s3 = count of LDL, s4 = count of BPT  ,in the buffer
+
+
+   get_values_from_line:
+
+                     j line_test_values # Jump to the line_test_values label
+
+            return_values:
 
             #-----------------------------------sum the values of the test result to calculate the average--------------------------------
 
@@ -625,48 +577,28 @@ continueToSecondLine:
             beq $t4, 4, BPT_test_sum
 
             Hgb_test_sum:
-                        la $a0, outputString   # Load address of the output string into $a0
-                        jal parseString        # Jump to the string parsing function
-                        jal convertPartsToFloatAndPrint
                         add.s $f20, $f20, $f1 
-                        j doneSum
-
+                         beq $s7, 1, find_the_avg  # if s7 = 1 mean done file reading
+                        j get_values_from_line
 
             BGT_test_sum:
-                        la $a0, outputString   # Load address of the output string into $a0
-                        jal parseString        # Jump to the string parsing function
-                        jal convertPartsToFloatAndPrint
                         add.s $f21, $f21, $f1
-			 j doneSum            
+                         beq $s7, 1, find_the_avg  # if s7 = 1 mean done file reading
+			            j get_values_from_line            
 
 
             LDL_test_sum:
-                        la $a0, outputString   # Load address of the output string into $a0
-                        jal parseString        # Jump to the string parsing function
-                        jal convertPartsToFloatAndPrint
                         add.s $f22, $f22, $f1
-                        j doneSum	
+                         beq $s7, 1, find_the_avg  # if s7 = 1 mean done file reading
+                        j get_values_from_line	
                         		
             BPT_test_sum: 
-                        la $a0, outputString   # Load address of the output string into $a0
-                        jal parseString        # Jump to the string parsing function
-                        jal convertPartsToFloatAndPrint
                         add.s $f23, $f23, $f1
+                         beq $s7, 1, find_the_avg  # if s7 = 1 mean done file reading
+                        j get_values_from_line
 
 
 #-----------------------------------End of sum the values of the test result to calculate the average--------------------------
-
-doneSum:
-
-                addiu $t7, $t7, 1
-                move $a0, $t7 
-                li $t2, 0              # Reset the sum for next ID
-                lb $a1, 0($a0)
-                beq $a1, '\0', find_the_avg  # Check for end of buffer
-                la $a1, outputString   # rest address of the output string into $a1
-                
-            j find_semicolon
-
 
 find_the_avg:
             # Convert count from integer to floating-point
@@ -753,77 +685,6 @@ find_the_avg:
 
             j menu_loop
                
-
-# -----------------------------------Get return uniqe value in t4 according to the test name-------------------------------- 
-
- 
- determine_test_name: 
-  li $t3, 0 # rest the value of asscii sum. 
-
- GetUniqeValueOfTestName:
-
-  addiu $a0, $a0, 1      # Skip the : character
-  move $t7, $a0          # Update the start of the next line 
-   
-  lb $t0, 0($a0)        # Load the next character from the input string into $t0
-  beq $t0, ' ', GetUniqeValueOfTestName # Check for the end of the string
-  
-  # sum the ascii values of the test name to choose the test value to calculate the average
-    beq $t0, ',', get_type_of_test # If colon, have unique value for each test name 
-    addu $t3, $t3, $t0     # Add the ASCII value to the sum for test name comparison
-    
-    jal GetUniqeValueOfTestName
-
-
-get_type_of_test:
-
-    addiu $t2, $t2, 1     # Increment the semicolon counter
-    sw $t2, semicolonCount # Store the updated counter
-
-     # Check the sum of the ASCII values to determine the test name
-
-    li $t1, 0x111        # ASCII sum for "Hgb"
-    beq $t3, $t1, Hgb_test # If the sum matches "Hgb", jump to Hgb_test
-
-    li $t1, 0xDD         #  ASCII sum for "BGT"
-    beq $t3, $t1, BGT_test # If the sum matches "BGT", jump to BGT_test
-
-    li $t1, 0xDC        #  ASCII sum for "LDL"
-    beq $t3, $t1, LDL_test # If the sum matches "LDL", jump to LDL_test
-
-    li $t1, 0xE6         #  ASCII sum for "BPT"
-    beq $t3, $t1, BPT_test # If the sum matches "BPT", jump to BPT_test
-
-#return unique value for each test name
-
-    Hgb_test:
-        li $t4, 1
-        addiu $s1, $s1, 1
-        addiu $a0, $a0, 1 # skip comma 
-        j find_semicolon
-
-    BGT_test:
-        li $t4, 2
-        addiu $s2, $s2, 1
-        addiu $a0, $a0, 1 
-        j find_semicolon
-
-    LDL_test:
-        li $t4, 3
-        addiu $s3, $s3, 1
-        addiu $a0, $a0, 1
-        j find_semicolon
-
-    BPT_test:
-        li $t4, 4
-        addiu $s4, $s4, 1
-        addiu $a0, $a0, 1
-        j find_semicolon    
-
-
-#-----------------------------------end of Get return uniqe value in t4 according to the test name------------------------
-
-
 
 #----------------------------------------------end of get average test value-----------------------------------------------
 
@@ -979,6 +840,211 @@ invalidInput:
 
 
 
+#------------------------calculate the sum of the ASCII values in the inputBuffer_ID--------------
+calculateSum:
+    # Input: $a0 (address of the string)
+    # Output: $v0 (sum of ASCII values)
+    li $v0, 0              # Initialize sum to 0
+sum_loop:
+    lb $t1, 0($a0)         # Load the next character
+    beq $t1, '\0', end_sum # Check for end of string
+    beq $t1, '\n', end_sum # Check for end of string
+    addu $v0, $v0, $t1     # Add character's ASCII value to sum
+    addiu $a0, $a0, 1      # Move to the next character
+    j sum_loop
+end_sum:
+    jr $ra                 # Return with sum in $v0
+
+
+#-------------------------------------End of calculate the sum of the ASCII values in the inputBuffer_ID----------------
+
+
+#-------------------------Function Return float in F1 also type of Test name for eachline as parameter in a0---------
+
+
+#line_test_values: 
+
+# this function retrun the float value of the test result in F1 and the type of the test in t4
+#and also a0 will be the start of the next line. if there no next line 
+
+
+#example 
+# 1200105:LDL, 2002-22, 6.0 line 
+
+# F(a0)  Return --> F1 = 6.0 (float point) , t4 = 3 (type of test = LDL) , a0 = start of the next line
+# s1 = 0, s2 = 0, s3 = 1, s4 = 0 (count of each test result) in the buffer   
+# s7 = 0 means a0 has new line address and the buffer not end , s7 = 1 means the buffer end. and no more lines.
+
+# t4 = 1 means Hgb, t4 = 2 means BGT, t4 = 3 means LDL, t4 = 4 means BPT
+# s1 = count of Hgp, s2 = count of BGT, s3 = count of LDL, s4 = count of BPT  ,in the buffer
+
+# at the end of the function change "return_values" to "branch you want to go to and get values and start the next line"
+
+
+line_test_values:
+
+    la $a1, outputString   # Load address of the output string of testResult(string) into $a1  
+    
+    # .data section : outputString: .space 50  # Allocate space for the output string
+
+    li $t2, 0 # rest the value of asscii sum.
+
+
+find_semicolon:
+
+    lb $t0, 0($a0)        # Load the next character from the input string into $t0
+    beq $t0, ':', determine_test_name # If colon, check if ID matches
+    li $t1, ','           # Load the ASCII value of semicolon into $t1
+    beq $t0, $t1, increment_counter # If the current character is a semicolon, increment the counter
+    addiu $a0, $a0, 1     # Move to the next character in the input string
+    j find_semicolon      # Jump back to the start of the loop
+
+increment_counter:
+    addiu $t2, $t2, 1     # Increment the semicolon counter
+    addiu $a0, $a0, 1     # Move past the semicolon
+    li $t3, 2             # We're looking for the second semicolon
+    beq $t2, $t3, start_copying # If we've found two semicolons, start copying
+    j find_semicolon      # Otherwise, keep looking for semicolons
+
+start_copying:
+
+    lb $t0, 0($a0)        # Load the next character from the input string into $t0
+    beq $t0, ' ', skipSpace # Check for the space character
+    beq $t0, '\n', ReturnValues # Check for the end of the line
+
+    sb $t0, 0($a1)        # Store the character in the output string
+    addiu $a0, $a0, 1     # Move to the next character in the input string
+    addiu $a1, $a1, 1     # Move to the next position in the output string
+    j start_copying       # Jump back to the start of the copy loop
+
+skipSpace:
+    addiu $a0, $a0, 1     # Move to the next character in the input string
+   j start_copying
+
+
+
+# -----------------------------------Get return uniqe value in t4 according to the test name-------------------------------- 
+
+
+ determine_test_name: 
+  li $t3, 0 # rest the value of asscii sum. 
+
+ GetUniqeValueOfTestName:
+
+  addiu $a0, $a0, 1      # Skip the : character
+  lb $t0, 0($a0)        # Load the next character from the input string into $t0
+  beq $t0, ' ', GetUniqeValueOfTestName # Check for the end of the string
+  
+  # sum the ascii values of the test name to choose the test value to calculate the average
+    beq $t0, ',', get_type_of_test # If colon, have unique value for each test name 
+    addu $t3, $t3, $t0     # Add the ASCII value to the sum for test name comparison
+    
+    jal GetUniqeValueOfTestName
+
+get_type_of_test:
+
+    addiu $t2, $t2, 1     # Increment the semicolon counter
+
+     # Check the sum of the ASCII values to determine the test name
+
+    li $t1, 0x111        # ASCII sum for "Hgb"
+    beq $t3, $t1, Hgb_test # If the sum matches "Hgb", jump to Hgb_test
+
+    li $t1, 0xDD         #  ASCII sum for "BGT"
+    beq $t3, $t1, BGT_test # If the sum matches "BGT", jump to BGT_test
+
+    li $t1, 0xDC        #  ASCII sum for "LDL"
+    beq $t3, $t1, LDL_test # If the sum matches "LDL", jump to LDL_test
+
+    li $t1, 0xE6         #  ASCII sum for "BPT"
+    beq $t3, $t1, BPT_test # If the sum matches "BPT", jump to BPT_test
+
+#return unique value for each test name
+
+    Hgb_test:
+        li $t4, 1
+        addiu $s1, $s1, 1
+        addiu $a0, $a0, 1 # skip comma 
+        j find_semicolon
+
+    BGT_test:
+        li $t4, 2
+        addiu $s2, $s2, 1
+        addiu $a0, $a0, 1 
+        j find_semicolon
+
+    LDL_test:
+        li $t4, 3
+        addiu $s3, $s3, 1
+        addiu $a0, $a0, 1
+        j find_semicolon
+
+    BPT_test:
+        li $t4, 4
+        addiu $s4, $s4, 1
+        addiu $a0, $a0, 1
+        j find_semicolon    
+
+#-----------------------------------end of Get return uniqe value in t4 according to the test name------------------------
+
+
+ReturnValues:
+
+            move $t7, $a0          # save the start of the next line
+            sb $t0, 0($a1)        # Store \n in the output string for use it for termination
+
+
+            beq $t4, 1, Hgb_test_type
+            beq $t4, 2, BGT_test_type
+            beq $t4, 3, LDL_test_type
+            beq $t4, 4, BPT_test_type
+
+            Hgb_test_type:
+                        la $a0, outputString   # Load address of the output string into $a0
+                        jal parseString        # Jump to the string parsing function
+                        jal convertPartsToFloatAndPrint
+                        # f1 will have the float value of the test result
+                        j doneConvertion
+
+
+            BGT_test_type:
+                        la $a0, outputString   # Load address of the output string into $a0
+                        jal parseString        # Jump to the string parsing function
+                        jal convertPartsToFloatAndPrint
+                        # f1 will have the float value of the test result
+			            j doneConvertion            
+
+
+            LDL_test_type:
+                        la $a0, outputString   # Load address of the output string into $a0
+                        jal parseString        # Jump to the string parsing function
+                        jal convertPartsToFloatAndPrint
+                        # f1 will have the float value of the test result
+                        j doneConvertion	
+                        		
+            BPT_test_type: 
+                        la $a0, outputString   # Load address of the output string into $a0
+                        jal parseString        # Jump to the string parsing function
+                        jal convertPartsToFloatAndPrint
+                        # f1 will have the float value of the test result
+
+
+doneConvertion:
+
+                addiu $t7, $t7, 1 # Move to the next line 
+                move $a0, $t7    # Move to the next line stored in a0 as return value
+                li $t2, 0              # Reset the sum for next ID
+                lb $a1, 0($a0)
+                beq $a1, '\0', buffer_done # Check for end of buffer
+                li $s7, 0 # set the value of s6 to 0 to indicate that the buffer is not done.
+                j return_values # choose the function  the main function to return and get the values
+
+                buffer_done:
+                li $s7, 1 # set the value of s6 to 1 to indicate that the buffer is done
+                j return_values #choose the function  the main function to return and get the values
+               
+
+
 #-------------------------------------string to float conversion --------------------------------------------
 
 parseString:
@@ -1046,6 +1112,33 @@ convertPartsToFloatAndPrint:
     jr $ra                 # Return
 	
 #---------------------------------------End of string to float conversion--------------------------------------------
+
+
+#---------------------------------------End of Function which returns the type of the test--------------
+
+#---------------------------------------file Functions area--------------------------------------------
+
+error_open:
+    li $v0, 4                # sys_write (print_string)
+    la $a0, error_msg        # Pointer to the error message
+    syscall
+
+    li $v0, 10               # sys_exit
+    syscall
+
+
+close_file:
+             
+    # Close the file
+    li $v0, 16               # sys_close
+    move $a0, $s6            # File descriptor
+    syscall
+
+j menu_loop
+
+#---------------------------------------End of file Functions area--------------------------------------------
+
+
 
 #---------------------------------------Functions area--------------------------------------------        
 
