@@ -71,6 +71,9 @@ messageBGT: .asciiz "Average BGT: "
 messageLDL: .asciiz "Average LDL: "
 messageBPT: .asciiz "Average BPT: "
 
+zero_float: .float 0.0   # Define a floating point zero constant in data segment
+
+
 #end of average test value ---------------------
 
 .text
@@ -532,10 +535,13 @@ average_test_value:
     li $s3, 0 # for count of LDL
     li $s4, 0 # for count of BPT
 
-    li.s $f20, 0.0 # for sum of Hgb
-    li.s $f21, 0.0 # for sum of BGT
-    li.s $f22, 0.0 # for sum of LDL
-    li.s $f23, 0.0 # for sum of BPT
+    # Initialize floating-point registers with zero
+    la $a0, zero_float     # Load the address of the zero_float constant
+    lwc1 $f20, 0($a0)      # Load the floating-point zero into $f20
+    lwc1 $f21, 0($a0)      # Load the floating-point zero into $f21
+    lwc1 $f22, 0($a0)      # Load the floating-point zero into $f22
+    lwc1 $f23, 0($a0)      # Load the floating-point zero into $f23
+
 
    # Close the file if the search opend at first by user
     li $v0, 16                 # Syscall: close file
@@ -622,14 +628,16 @@ continueToSecondLine:
                         la $a0, outputString   # Load address of the output string into $a0
                         jal parseString        # Jump to the string parsing function
                         jal convertPartsToFloatAndPrint
-                        add.s $f20, $f20, $f1
+                        add.s $f20, $f20, $f1 
+                        j doneSum
 
 
             BGT_test_sum:
                         la $a0, outputString   # Load address of the output string into $a0
                         jal parseString        # Jump to the string parsing function
                         jal convertPartsToFloatAndPrint
-                        add.s $f21, $f21, $f1            
+                        add.s $f21, $f21, $f1
+			 j doneSum            
 
 
             LDL_test_sum:
@@ -637,23 +645,25 @@ continueToSecondLine:
                         jal parseString        # Jump to the string parsing function
                         jal convertPartsToFloatAndPrint
                         add.s $f22, $f22, $f1
-
+                        j doneSum	
+                        		
             BPT_test_sum: 
                         la $a0, outputString   # Load address of the output string into $a0
                         jal parseString        # Jump to the string parsing function
                         jal convertPartsToFloatAndPrint
                         add.s $f23, $f23, $f1
-                                     
+
 
 #-----------------------------------End of sum the values of the test result to calculate the average--------------------------
 
-
+doneSum:
 
                 addiu $t7, $t7, 1
                 move $a0, $t7 
                 li $t2, 0              # Reset the sum for next ID
                 lb $a1, 0($a0)
                 beq $a1, '\0', find_the_avg  # Check for end of buffer
+                la $a1, outputString   # rest address of the output string into $a1
                 
             j find_semicolon
 
@@ -674,52 +684,95 @@ find_the_avg:
             div.s $f13, $f21, $f13  # Average for BGT
             div.s $f14, $f22, $f14  # Average for LDL
             div.s $f15, $f23, $f15  # Average for BPT
+            
+            
+                   # Print newline character
+   	     li $v0, 11          # System call for printing a character
+             li $a0, 10          # Load ASCII value of newline ('\n') into $a0
+             syscall 
+
 
             # Print each average
             li $v0, 4
             la $a0, messageHgb
             syscall
-            mov.s $f12, $f12  # Load average Hgb for printing
+            
+            
             li $v0, 2         # Print float
+            mov.s $f12, $f12  # Load average Hgb for printing
             syscall
+            
+                # Print newline character
+   	     li $v0, 11          # System call for printing a character
+             li $a0, 10          # Load ASCII value of newline ('\n') into $a0
+             syscall 
 
             li $v0, 4
             la $a0, messageBGT
             syscall
+            
+            
+            li $v0, 2         # Print float
             mov.s $f12, $f13  # Load average BGT for printing
             syscall
+            
+                  # Print newline character
+   	     li $v0, 11          # System call for printing a character
+             li $a0, 10          # Load ASCII value of newline ('\n') into $a0
+             syscall 
+
 
             li $v0, 4
             la $a0, messageLDL
             syscall
-            mov.s $f12, $f14  # Load average LDL for printing
+            
+            
+            li $v0, 2         # Print float
+            mov.s $f12, $f14  # Load average LDL for printin
             syscall
+            
+                  # Print newline character
+   	     li $v0, 11          # System call for printing a character
+             li $a0, 10          # Load ASCII value of newline ('\n') into $a0
+             syscall 
+
 
             li $v0, 4
             la $a0, messageBPT
             syscall
+            
             mov.s $f12, $f15  # Load average BPT for printing
+            li $v0, 2         # Print float
             syscall
+            
+                  # Print newline character
+   	     li $v0, 11          # System call for printing a character
+             li $a0, 10          # Load ASCII value of newline ('\n') into $a0
+             syscall 
+
 
             j menu_loop
                
 
 # -----------------------------------Get return uniqe value in t4 according to the test name-------------------------------- 
- determine_test_name:
 
-  addiu $a0, $a0, 1      # Skip the newline character
+ 
+ determine_test_name: 
+  li $t3, 0 # rest the value of asscii sum. 
+
+ GetUniqeValueOfTestName:
+
+  addiu $a0, $a0, 1      # Skip the : character
   move $t7, $a0          # Update the start of the next line 
    
   lb $t0, 0($a0)        # Load the next character from the input string into $t0
-  beq $t0, ' ', determine_test_name # Check for the end of the string
+  beq $t0, ' ', GetUniqeValueOfTestName # Check for the end of the string
   
   # sum the ascii values of the test name to choose the test value to calculate the average
-
-    li $t3, 0
-    addu $t3, $t3, $t0     # Add the ASCII value to the sum for test name comparison
     beq $t0, ',', get_type_of_test # If colon, have unique value for each test name 
-
-    jal determine_test_name 
+    addu $t3, $t3, $t0     # Add the ASCII value to the sum for test name comparison
+    
+    jal GetUniqeValueOfTestName
 
 
 get_type_of_test:
@@ -735,7 +788,7 @@ get_type_of_test:
     li $t1, 0xDD         #  ASCII sum for "BGT"
     beq $t3, $t1, BGT_test # If the sum matches "BGT", jump to BGT_test
 
-    li $t1, 0x134        #  ASCII sum for "LDL"
+    li $t1, 0xDC        #  ASCII sum for "LDL"
     beq $t3, $t1, LDL_test # If the sum matches "LDL", jump to LDL_test
 
     li $t1, 0xE6         #  ASCII sum for "BPT"
@@ -746,21 +799,25 @@ get_type_of_test:
     Hgb_test:
         li $t4, 1
         addiu $s1, $s1, 1
+        addiu $a0, $a0, 1 # skip comma 
         j find_semicolon
 
     BGT_test:
         li $t4, 2
         addiu $s2, $s2, 1
+        addiu $a0, $a0, 1 
         j find_semicolon
 
     LDL_test:
         li $t4, 3
         addiu $s3, $s3, 1
+        addiu $a0, $a0, 1
         j find_semicolon
 
     BPT_test:
         li $t4, 4
         addiu $s4, $s4, 1
+        addiu $a0, $a0, 1
         j find_semicolon    
 
 
@@ -933,9 +990,7 @@ parseString:
     # Parse the integer part
 parseInteger:
     lb $t0, 0($a0)         # Load the next byte (character) from the string
-    beq $t0, '.', endInteger # Check for decimal point
-    beq $t0, '\0', endInteger # Check for null terminator
-    
+    beq $t0, '.', endInteger # Check for decimal point    
     sub $t0, $t0, '0'      # Convert from ASCII to integer
     mul $t1, $t1, 10       # Multiply current result by 10
     add $t1, $t1, $t0      # Add the new digit
@@ -950,7 +1005,7 @@ endInteger:
     # Parse the fractional part
 parseFractional:
     lb $t0, 0($a0)         # Load the next byte (character)
-    beq $t0, '\0', endFractional # Check for null terminator
+    beq $t0, '\n', endFractional # Check for null terminator
     
     sub $t0, $t0, '0'      # Convert from ASCII to integer
     mul $t2, $t2, 10       # Multiply current result by 10
@@ -987,7 +1042,9 @@ convertPartsToFloatAndPrint:
 
     # Combine integer and fractional parts
     add.s $f1, $f1, $f2
-
+    
+    jr $ra                 # Return
+	
 #---------------------------------------End of string to float conversion--------------------------------------------
 
 #---------------------------------------Functions area--------------------------------------------        
