@@ -60,8 +60,6 @@ error_msg: .asciiz "Failed to open the file.\n"
 # for average test value ---------------------
 
 outputString: .space 50  # Allocate space for the output string
-semicolonCount: .word 0  # Counter for the number of semicolons
-
 integerPart: .word 0       # Space for the integer part
 fractionalPart: .word 0    # Space for the fractional part as an integer
 scale: .word 1             # Scale
@@ -75,6 +73,18 @@ zero_float: .float 0.0   # Define a floating point zero constant in data segment
 
 
 #end of average test value ---------------------
+
+# for normal and unnormal test ---------------------
+
+    lowerBoundHgb: .float 13.8
+    upperBoundHgb: .float 17.2
+    lowerBoundBGT: .float 70.0
+    upperBoundBGT: .float 99.0
+    upperBoundLDL: .float 100.0
+    upperBoundSystolicBPT: .float 120.0
+    upperBoundDiastolicBPT: .float 80.0
+
+#end of normal and unnormal test ---------------------
 
 .text
 .globl main
@@ -482,6 +492,163 @@ Done_file_reading:
      
 
 retrieve_all_up_normal_tests:
+
+
+    jal openReadFile # Open the file for reading
+
+
+   # -----------------------------------Loading the buffer with the file content--------------------------------
+
+    li $v0, 14               # sys_read
+    move $a0, $s6            # File descriptor
+    la $a1, buffer           # Pointer to the buffer
+    lw $a2, readSize         # Number of bytes to read
+    syscall
+
+    move $t1, $v0            # Store the number of bytes read in $t1
+    beqz $v0, close_file     # If no bytes were read, end of file has been reached
+
+    # -----------------------------------End of loading the buffer with the file content--------------------------------
+
+
+
+  # Prompt user for the test ID
+    li $v0, 4
+    la $a0, inputPrompt
+    syscall
+
+    # Read the test ID as a string
+    li $v0, 8
+    la $a0, inputBuffer_ID
+    li $a1, 20
+    syscall
+
+    # Search for the test ID in the buffer
+  
+ # Initialize $t3 with 0 for summing ASCII values of inputBuffer_ID
+    li $t3, 0
+    la $a0, inputBuffer_ID
+    jal calculateSum       # Calculate sum of ASCII values in inputBuffer_ID
+    move $t5, $v0          # Move result to $t5
+
+    # Reset $t3 to 0 for use in comparing with each ID in buffer
+    li $t3, 0
+    la $a0, buffer         # Load address of the start of the buffer into $a0
+    la $t9, buffer         # Initialize $t9 with the start of the buffer
+
+findIdInline:
+
+    lb $a1, 0($a0)         # Load the byte at the current buffer position into $a1
+    beq $a1, ':', checkIDforNormal              # If colon, check if ID matches
+
+    addu $t3, $t3, $a1     # Add the ASCII value to the sum for ID comparison
+    addiu $a0, $a0, 1      # Move to the next character in buffer
+    j findIdInline
+
+checkIDforNormal:
+    
+    beq $t5, $t3, values_equal # Compare sum of ASCII values
+    # If not equal, find the start of the next line
+    jal findNextLine
+    j findIdInline
+
+values_equal:
+
+    move $a0, $t9          # Load the address of the start of the line into $a0
+
+    # Logic for printing the data after ID match
+
+    #normal range for each test
+    #1. Hemoglobin (Hgb): 13.8 to 17.2 grams per deciliter 
+    #2. Blood Glucose Test (BGT): Normal Range Between 70 to 99 milligrams per deciliter (mg/dL) 
+    #3. LDL Cholesterol Low-Density Lipoprotein (LDL): Normal Range Less than 100 mg/dL
+    #4. Blood Pressure Test (BPT): Normal Range: Systolic Blood Pressure: Less than 120 millimeters of 
+    #   mercury (mm Hg). Diastolic Blood Pressure: Less than 80 mm Hg 
+
+check_test_resultNormal: 
+
+            jal line_test_values # Jump to the line_test_values label
+
+            #-----------------------------------sum the values of the test result to calculate the average--------------------------------
+
+            beq $t4, 1, Hgb_test_Normal
+            beq $t4, 2, BGT_test_Normal
+            beq $t4, 3, LDL_test_Normal
+            beq $t4, 4, BPT_test_Normal
+
+            Hgb_test_Normal:
+                        
+                           lwc1 $f3, lowerBoundHgb # Load the lower bound value is 13.8
+                           lwc1 $f4, upperBoundHgb # Load the upper bound value is 17.2
+                           c.lt.s $f1, $f3       # Compare the test result with the lower bound
+                           bc1t end_findNextLine  # If the test result is less than the lower bound, end the line
+                           c.le.s $f4, $f1       # Compare the test result with the upper bound
+                           bc1f end_findNextLine # If the test result is greater than the upper bound, end the line
+                           move $a0, $t9          # Load the address of the start of the line into $a0
+                           j printData          # Print the data for this line
+                    
+            BGT_test_Normal:
+                           lwc1 $f3, lowerBoundBGT # Load the lower bound value is 70.0
+                           lwc1 $f4, upperBoundBGT # Load the upper bound value is 99.0
+                           c.lt.s $f1, $f3       # Compare the test result with the lower bound
+                           bc1t end_findNextLine  # If the test result is less than the lower bound, end the line
+                           c.le.s $f4, $f1       # Compare the test result with the upper bound
+                           bc1f end_findNextLine # If the test result is greater than the upper bound, end the line
+                           move $a0, $t9          # Load the address of the start of the line into $a0
+                           j printData          # Print the data for this line                                          
+
+            LDL_test_Normal:
+                            lwc1 $f3, upperBoundLDL # Load the upper bound value is 100.0
+                            c.le.s $f3, $f1       # Compare the test result with the upper bound
+                            bc1f end_findNextLine # If the test result is greater than the upper bound, end the line
+                            move $a0, $t9          # Load the address of the start of the line into $a0
+                            j printData          # Print the data for this line
+                            
+                        		
+            BPT_test_Normal: 
+                            lwc1 $f3, upperBoundSystolicBPT # Load the upper bound value is 120.0
+                            lwc1 $f4, upperBoundDiastolicBPT # Load the upper bound value is 80.0
+                            c.le.s $f3, $f1       # Compare the test result with the upper bound
+                            bc1f end_findNextLine # If the test result is greater than the upper bound, end the line
+                            c.le.s $f4, $f1       # Compare the test result with the upper bound
+                            bc1f end_findNextLine # If the test result is greater than the upper bound, end the line
+                            move $a0, $t9          # Load the address of the start of the line into $a0
+                            j printData          # Print the data for this line
+                        
+end_findNextLine:
+    li $t3, 0              # Reset the sum for next ID
+    move $t9, $a0          # Update the start of the next line
+    j findIdInline        # Continue with next ID
+
+printData:
+    lb $a1, 0($a0)
+    beq $a1, '\n', GoNextLine  # End of data for this line
+    move $a0, $a1
+    li $v0, 11             # syscall for printing character
+    syscall
+    
+    addiu $t9, $t9, 1      # Move to the next character in buffer
+    move $a0, $t9          # Load the address of the start of the line into $a0
+   
+    j printData            # Continue printing data
+    
+GoNextLine:
+    move $a0, $a1
+    li $v0, 11             # syscall for printing character
+    syscall
+    addiu $t9, $t9, 1
+    move $a0, $t9 
+    li $t3, 0              # Reset the sum for next ID
+    lb $a1, 0($a0)
+    beq $a1, '\0', Done_file_reading  # Check for end of buffer
+     
+ j findIdInline
+
+
+Done_file_reading:
+     j menu_loop
+    
+
 
     j menu_loop
 
@@ -1116,6 +1283,25 @@ convertPartsToFloatAndPrint:
 #---------------------------------------End of Function which returns the type of the test--------------
 
 #---------------------------------------file Functions area--------------------------------------------
+
+openReadFile:
+ # Close the file if the search opend at first by user
+    li $v0, 16                 # Syscall: close file
+    move $a0, $s7              # File descriptor
+    syscall
+    
+   # Open the file for reading
+    li $v0, 13               # sys_open
+    la $a0, filename         # Pointer to the filename
+    li $a1, 0                # Flag for reading
+    syscall
+    move $s6, $v0            # Save the file descriptor
+
+    # Check for successful file opening
+    bltz $s6, error_open
+
+    jr $ra
+
 
 error_open:
     li $v0, 4                # sys_write (print_string)
