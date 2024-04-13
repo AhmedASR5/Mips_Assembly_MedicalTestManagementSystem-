@@ -523,39 +523,28 @@ retrieve_all_up_normal_tests:
     li $a1, 20
     syscall
 
-    # Search for the test ID in the buffer
+
+li $s7, 0 # Initialize the flag to 0
+la $a0, buffer # Load the address of the buffer into $a0
+
+
+cheack_file_IDs:
+
+    move $t9, $a0 # Save the address of the start of the buffer in $t7
+
+    jal BoolIDCheck # f(a0 , inputbuffer_ID) retrun 1 in t5 if the ID is equal to the inputBuffer_ID
+
+    #if the t5 = 1 mean the ID is equal to the inputBuffer_ID
+    #else the ID is not equal to the inputBuffer_ID
+
+    beq $t5, 1, check_test_resultNormal
+    jal get_next_line
+    beq $t5, 1, menu_loop
+    j cheack_file_IDs
+
+
+
   
- # Initialize $t3 with 0 for summing ASCII values of inputBuffer_ID
-    li $t3, 0
-    la $a0, inputBuffer_ID
-    jal calculateSum       # Calculate sum of ASCII values in inputBuffer_ID
-    move $t5, $v0          # Move result to $t5
-
-    # Reset $t3 to 0 for use in comparing with each ID in buffer
-    li $t3, 0
-    la $a0, buffer         # Load address of the start of the buffer into $a0
-    la $t9, buffer         # Initialize $t9 with the start of the buffer
-
-findIdInline:
-
-    lb $a1, 0($a0)         # Load the byte at the current buffer position into $a1
-    beq $a1, ':', checkIDforNormal              # If colon, check if ID matches
-
-    addu $t3, $t3, $a1     # Add the ASCII value to the sum for ID comparison
-    addiu $a0, $a0, 1      # Move to the next character in buffer
-    j findIdInline
-
-checkIDforNormal:
-    
-    beq $t5, $t3, values_equal # Compare sum of ASCII values
-    # If not equal, find the start of the next line
-    jal findNextLine
-    j findIdInline
-
-values_equal:
-
-    move $a0, $t9          # Load the address of the start of the line into $a0
-
     # Logic for printing the data after ID match
 
     #normal range for each test
@@ -567,7 +556,8 @@ values_equal:
 
 check_test_resultNormal: 
 
-            jal line_test_values # Jump to the line_test_values label
+            move $a0, $t9          # Load the address of the start of the line into $a0
+            jal line_test_values # f(a0) retrun F1 = test result in floating point, t4 = type of test, a0 = start of the next line
 
             #-----------------------------------sum the values of the test result to calculate the average--------------------------------
 
@@ -585,7 +575,12 @@ check_test_resultNormal:
                            c.le.s $f4, $f1       # Compare the test result with the upper bound
                            bc1f end_findNextLine # If the test result is greater than the upper bound, end the line
                            move $a0, $t9          # Load the address of the start of the line into $a0
-                           j printData          # Print the data for this line
+                           j printLine          # f(a0) print the data for this line
+                           move $a0, $t9          # Load the address of the start of the line into $a0
+                           jal get_next_line    # f(a0) get the next line
+                           beq $s7, 1, menu_loop # If the end of the file is reached, return to the menu
+                           j  cheack_file_IDs
+
                     
             BGT_test_Normal:
                            lwc1 $f3, lowerBoundBGT # Load the lower bound value is 70.0
@@ -595,14 +590,22 @@ check_test_resultNormal:
                            c.le.s $f4, $f1       # Compare the test result with the upper bound
                            bc1f end_findNextLine # If the test result is greater than the upper bound, end the line
                            move $a0, $t9          # Load the address of the start of the line into $a0
-                           j printData          # Print the data for this line                                          
+                           j printLine          # f(a0) print the data for this line 
+                           move $a0, $t9          # Load the address of the start of the line into $a0
+                           jal get_next_line    # f(a0) get the next line
+                           beq $s7, 1, menu_loop
+                           j  cheack_file_IDs                                        
 
             LDL_test_Normal:
                             lwc1 $f3, upperBoundLDL # Load the upper bound value is 100.0
                             c.le.s $f3, $f1       # Compare the test result with the upper bound
                             bc1f end_findNextLine # If the test result is greater than the upper bound, end the line
                             move $a0, $t9          # Load the address of the start of the line into $a0
-                            j printData          # Print the data for this line
+                            j printLine          # f(a0) print the data for this line 
+                            move $a0, $t9          # Load the address of the start of the line into $a0
+                            jal get_next_line    # f(a0) get the next line
+                            beq $s7, 1, menu_loop
+                            j  cheack_file_IDs
                             
                         		
             BPT_test_Normal: 
@@ -613,43 +616,13 @@ check_test_resultNormal:
                             c.le.s $f4, $f1       # Compare the test result with the upper bound
                             bc1f end_findNextLine # If the test result is greater than the upper bound, end the line
                             move $a0, $t9          # Load the address of the start of the line into $a0
-                            j printData          # Print the data for this line
+                            j printLine         # f(a0) print the data for this line 
+                            move $a0, $t9          # Load the address of the start of the line into $a0
+                            jal get_next_line    # f(a0) get the next line
+                            beq $s7, 1, menu_loop
+                            j  cheack_file_IDs
+                            
                         
-end_findNextLine:
-    li $t3, 0              # Reset the sum for next ID
-    move $t9, $a0          # Update the start of the next line
-    j findIdInline        # Continue with next ID
-
-printData:
-    lb $a1, 0($a0)
-    beq $a1, '\n', GoNextLine  # End of data for this line
-    move $a0, $a1
-    li $v0, 11             # syscall for printing character
-    syscall
-    
-    addiu $t9, $t9, 1      # Move to the next character in buffer
-    move $a0, $t9          # Load the address of the start of the line into $a0
-   
-    j printData            # Continue printing data
-    
-GoNextLine:
-    move $a0, $a1
-    li $v0, 11             # syscall for printing character
-    syscall
-    addiu $t9, $t9, 1
-    move $a0, $t9 
-    li $t3, 0              # Reset the sum for next ID
-    lb $a1, 0($a0)
-    beq $a1, '\0', Done_file_reading  # Check for end of buffer
-     
- j findIdInline
-
-
-Done_file_reading:
-     j menu_loop
-    
-
-
     j menu_loop
 
 
@@ -709,7 +682,7 @@ average_test_value:
     la $a0, buffer         # Load address of the start of the buffer into $a0
     la $t7, buffer         # Initialize $t7 with the start of the buffer
     la $a1, outputString   # Load address of the output string into $a1
-    lw $t2, semicolonCount # Load the initial value of the semicolon counter into $t2
+
 
 
 
@@ -1279,8 +1252,63 @@ convertPartsToFloatAndPrint:
 	
 #---------------------------------------End of string to float conversion--------------------------------------------
 
-
 #---------------------------------------End of Function which returns the type of the test--------------
+
+
+
+
+#---------------------------------------Check Id is equal to the inputBuffer_ID-------------------------
+
+BoolIDCheck:
+
+# f(a0, inputbuffer ) Return --> in t5 = 1 if the ID is equal to the inputBuffer_ID, 0 otherwise
+# a0 for the line .
+
+    move $t8, $ra # save the return address
+
+    move $t7 , $a0 # save the address of the line in t7
+
+    # Search for the test ID in the buffer
+  
+ # Initialize $t3 with 0 for summing ASCII values of inputBuffer_ID
+    li $t3, 0
+    la $a0, inputBuffer_ID
+    jal calculateSum       # Calculate sum of ASCII values in inputBuffer_ID
+    move $t5, $v0          # Move result to $t5
+
+
+
+    move $a0, $t7 # restore the address of the line in a0
+    # Reset $t3 to 0 for use in comparing with each ID in buffer
+    li $t3, 0
+
+findIdInline:
+
+    lb $a1, 0($a0)         # Load the byte at the current buffer position into $a1
+    beq $a1, ':', checkIdIfEqual              # If colon, check if ID matches
+    addiu $a0, $a0, 1      # Move to the next character in buffer
+    addu $t3, $t3, $a1     # Add the ASCII value to the sum for ID comparison
+    j findIdInline
+
+checkIdIfEqual:
+    beq $t5, $t3, values_equal_OF_IDS # Compare sum of ASCII values
+    # If not equal, find the start of the next line
+        li $t5, 0
+        move $ra, $t8 # restore the return address
+        jr $ra
+
+
+values_equal_OF_IDS :
+    # If the ID is equal, return 1
+    li $t5, 1
+    move $ra, $t8 # restore the return address
+    jr $ra
+
+
+
+#---------------------------------------End of Check Id is equal to the inputBuffer_ID------------------
+
+
 
 #---------------------------------------file Functions area--------------------------------------------
 
@@ -1320,6 +1348,50 @@ close_file:
     syscall
 
 j menu_loop
+
+
+#print the line of the file
+
+printLine:
+    lb $a1, 0($a0)
+    beq $a1, '\n', donePrintingLine  # End of data for this line
+    beq $a1, '\0', doneFile  # End of data for this line
+    move $a0, $a1
+    li $v0, 11             # syscall for printing character
+    syscall
+    
+    addiu $t9, $t9, 1      # Move to the next character in buffer
+    move $a0, $t9          # Load the address of the start of the line into $a0
+   
+    j printData            # Continue printing data
+    
+donePrintingLine:
+        jr $ra
+
+doneFile:
+    li $s7 , 1 # set the value of s7 to 1 to indicate that the buffer is done.
+    jr $ra
+    
+        
+get_next_line:
+    # f(a0) return --> in a0 the start of the next line , s7 = 1 if the buffer is done, 0 otherwise
+
+    lb $a1 , 0($a0) # Load the next character from the buffer into $a1
+    beq $a1, '\n', done_get_next_line  # End of data for this line
+    beq $a1, '\0', noNextLIne  # End of data for this line
+    addiu $a0, $a0, 1      # Move to the next character in buffer
+    j get_next_line         # Continue printing data
+
+   done_get_next_line: 
+    addiu $a0, $a0, 1      # Move to the next line
+    jr $ra
+
+    noNextLIne:
+    li $s7 , 1 # set the value of s7 to 1 to indicate that the buffer is done.
+    jr $ra
+    
+    
+
 
 #---------------------------------------End of file Functions area--------------------------------------------
 
