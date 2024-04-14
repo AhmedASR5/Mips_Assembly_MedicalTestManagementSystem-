@@ -723,7 +723,7 @@ check_test_resultUnnormal:
 
 
             Hgb_test_unnormal:
-            
+
                             lwc1 $f3, lowerBoundHgb # Load the lower bound value, which is 13.8
                             lwc1 $f4, upperBoundHgb # Load the upper bound value, which is 17.2
 
@@ -1296,9 +1296,36 @@ get_type_of_test:
 
 
 ReturnValues:
-
+      
             move $t7, $a0          # save the start of the next line
             sb $t0, 0($a1)        # Store \n in the output string for use it for termination
+
+
+            #loop to check outupt string if it has dot or not
+
+          la $a0, outputString
+          check_dot:
+                    lb $t0, 0($a0)        # Load the next character from the output string into $t0
+                    beq $t0, '.', dot_found # If dot, jump to dot_found
+                    beq $t0, '\n', no_dot_found # If newline, jump to no_dot_found
+                    addiu $a0, $a0, 1      # Move to the next character in the output string
+                    j check_dot            # Jump back to the start of the loop
+
+          no_dot_found:
+                    li $t1, 0x2E          # ASCII value of '.'
+                    sb $t1, 0($a0)        # Add a decimal point to the end of the output string
+                    addiu $a0, $a0, 1     # Move to the next position in the output string
+                    # add zero value after the decimal point
+                    li $t1, 0x30          # ASCII value of '0'
+                    sb $t1, 0($a0)        # Add a zero after the decimal point
+                    addiu $a0, $a0, 1     # Move to the next position in the output string
+                    # add \n value after the decimal point
+                    li $t1, 0x0A          # ASCII value of '\n'
+                    sb $t1, 0($a0)        # Add a newline character after the decimal point
+                   
+
+           dot_found:  # don't do anything
+
 
 
             beq $t4, 1, Hgb_test_type
