@@ -83,6 +83,7 @@ zero_float: .float 0.0   # Define a floating point zero constant in data segment
     upperBoundLDL: .float 100.0
     upperBoundSystolicBPT: .float 120.0
     upperBoundDiastolicBPT: .float 80.0
+    floatReturned: .asciiz "float returned is : "
 
 #end of normal and unnormal test ---------------------
 
@@ -560,65 +561,73 @@ check_test_resultNormal:
             jal line_test_values # f(a0) retrun F1 = test result in floating point, t4 = type of test, a0 = start of the next line
 
             #-----------------------------------sum the values of the test result to calculate the average--------------------------------
-
+            
             beq $t4, 1, Hgb_test_Normal
             beq $t4, 2, BGT_test_Normal
             beq $t4, 3, LDL_test_Normal
             beq $t4, 4, BPT_test_Normal
 
-            Hgb_test_Normal:
-                        
-                           lwc1 $f3, lowerBoundHgb # Load the lower bound value is 13.8
-                           lwc1 $f4, upperBoundHgb # Load the upper bound value is 17.2
-                           c.lt.s $f1, $f3       # Compare the test result with the lower bound
-                           bc1t end_findNextLine  # If the test result is less than the lower bound, end the line
-                           c.le.s $f4, $f1       # Compare the test result with the upper bound
-                           bc1f end_findNextLine # If the test result is greater than the upper bound, end the line
-                           move $a0, $t9          # Load the address of the start of the line into $a0
-                           j printLine          # f(a0) print the data for this line
-                           move $a0, $t9          # Load the address of the start of the line into $a0
-                           jal get_next_line    # f(a0) get the next line
-                           beq $s7, 1, menu_loop # If the end of the file is reached, return to the menu
-                           j  cheack_file_IDs
 
+            Hgb_test_Normal:
+                            lwc1 $f3, lowerBoundHgb # Load the lower bound value, which is 13.8
+                            lwc1 $f4, upperBoundHgb # Load the upper bound value, which is 17.2
+
+                            c.lt.s $f1, $f3         # Compare the test result in $f1 with the lower bound $f3
+                            bc1t end_findNextLine   # If the test result is less than the lower bound, branch to end_findNextLine
+
+                            c.le.s $f4, $f1         # Compare the test result in $f1 with the upper bound $f4
+                            bc1t end_findNextLine   # If the test result is greater than the upper bound, branch to end_findNextLine
+
+                            move $a0, $t9           # Load the address of the start of the line into $a0
+                            jal printLine             # Jump to printLine to print the data for this line
+                            
+                            beq $s7, 1, menu_loop   # If the end of the file is reached, return to the menu
+                            j cheack_file_IDs       # Continue to check file IDs							
+                                                        
+                                    
                     
             BGT_test_Normal:
+
                            lwc1 $f3, lowerBoundBGT # Load the lower bound value is 70.0
                            lwc1 $f4, upperBoundBGT # Load the upper bound value is 99.0
-                           c.lt.s $f1, $f3       # Compare the test result with the lower bound
-                           bc1t end_findNextLine  # If the test result is less than the lower bound, end the line
-                           c.le.s $f4, $f1       # Compare the test result with the upper bound
-                           bc1f end_findNextLine # If the test result is greater than the upper bound, end the line
+
+                           c.lt.s $f1, $f3         # Compare the test result in $f1 with the lower bound $f3
+                           bc1t end_findNextLine   # If the test result is less than the lower bound, branch to end_findNextLine
+
+                           c.le.s $f4, $f1         # Compare the test result in $f1 with the upper bound $f4
+                           bc1t end_findNextLine   # If the test result is greater than the upper bound, branch to end_findNextLine
+                           
                            move $a0, $t9          # Load the address of the start of the line into $a0
-                           j printLine          # f(a0) print the data for this line 
-                           move $a0, $t9          # Load the address of the start of the line into $a0
-                           jal get_next_line    # f(a0) get the next line
+                           jal printLine          # f(a0) print the data for this line 
+
                            beq $s7, 1, menu_loop
                            j  cheack_file_IDs                                        
 
             LDL_test_Normal:
-                            lwc1 $f3, upperBoundLDL # Load the upper bound value is 100.0
-                            c.le.s $f3, $f1       # Compare the test result with the upper bound
-                            bc1f end_findNextLine # If the test result is greater than the upper bound, end the line
+
+                            lwc1 $f4, upperBoundLDL  # Load the upper bound value of 100.0 into $f3
+                            c.le.s $f4, $f1          # Compare the test result in $f1 with the upper bound in $f3
+                            bc1t end_findNextLine    # If $f1 is not less than or equal to $f3 (i.e., $f1 is greater than $f3), branch to end_findNextLine
+
                             move $a0, $t9          # Load the address of the start of the line into $a0
-                            j printLine          # f(a0) print the data for this line 
-                            move $a0, $t9          # Load the address of the start of the line into $a0
-                            jal get_next_line    # f(a0) get the next line
+                            jal printLine          # f(a0) print the data for this line 
+
                             beq $s7, 1, menu_loop
-                            j  cheack_file_IDs
-                            
+                            j  cheack_file_IDs         
                         		
             BPT_test_Normal: 
-                            lwc1 $f3, upperBoundSystolicBPT # Load the upper bound value is 120.0
-                            lwc1 $f4, upperBoundDiastolicBPT # Load the upper bound value is 80.0
-                            c.le.s $f3, $f1       # Compare the test result with the upper bound
-                            bc1f end_findNextLine # If the test result is greater than the upper bound, end the line
-                            c.le.s $f4, $f1       # Compare the test result with the upper bound
-                            bc1f end_findNextLine # If the test result is greater than the upper bound, end the line
+                            lwc1 $f4, upperBoundSystolicBPT # Load the upper bound value is 120.0
+                            lwc1 $f3, upperBoundDiastolicBPT # Load the upper bound value is 80.0
+
+                            c.lt.s $f1, $f3         # Compare the test result in $f1 with the lower bound $f3
+                            bc1t end_findNextLine   # If the test result is less than the lower bound, branch to end_findNextLine
+
+                            c.le.s $f4, $f1         # Compare the test result in $f1 with the upper bound $f4
+                            bc1t end_findNextLine   # If the test result is greater than the upper bound, branch to end_findNextLine
+
                             move $a0, $t9          # Load the address of the start of the line into $a0
-                            j printLine         # f(a0) print the data for this line 
-                            move $a0, $t9          # Load the address of the start of the line into $a0
-                            jal get_next_line    # f(a0) get the next line
+                            jal printLine         # f(a0) print the data for this line 
+
                             beq $s7, 1, menu_loop
                             j  cheack_file_IDs
                             
@@ -1353,9 +1362,12 @@ j menu_loop
 #print the line of the file
 
 printLine:
+
+    # f(a0) -> print line also t9 has the address of next line with a0 
+    	
     lb $a1, 0($a0)
     beq $a1, '\n', donePrintingLine  # End of data for this line
-    beq $a1, '\0', doneFile  # End of data for this line
+    beq $a1, '\0', noNextLIne  # End of data for this line
     move $a0, $a1
     li $v0, 11             # syscall for printing character
     syscall
@@ -1363,9 +1375,19 @@ printLine:
     addiu $t9, $t9, 1      # Move to the next character in buffer
     move $a0, $t9          # Load the address of the start of the line into $a0
    
-    j printData            # Continue printing data
+    j printLine            # Continue printing data
     
 donePrintingLine:
+
+    move $a0, $a1
+   	li $v0, 11             # syscall for printing character
+   	syscall
+   	
+        addiu $t9, $t9, 1      # Move to the next character in buffer
+        move $a0, $t9          # Load the address of the start of the line into $a0
+        lb $a1, 0($a0)
+        beq $a1, '\0', doneFile  # End of data for this line
+
         jr $ra
 
 doneFile:
@@ -1377,13 +1399,15 @@ get_next_line:
     # f(a0) return --> in a0 the start of the next line , s7 = 1 if the buffer is done, 0 otherwise
 
     lb $a1 , 0($a0) # Load the next character from the buffer into $a1
-    beq $a1, '\n', done_get_next_line  # End of data for this line
     beq $a1, '\0', noNextLIne  # End of data for this line
+    beq $a1, '\n', done_get_next_line  # End of data for this line
     addiu $a0, $a0, 1      # Move to the next character in buffer
     j get_next_line         # Continue printing data
 
    done_get_next_line: 
     addiu $a0, $a0, 1      # Move to the next line
+    lb $a1 , 0($a0) # Load the next character from the buffer into $a1
+    beq $a1, '\0', noNextLIne  # End of data for this line
     jr $ra
 
     noNextLIne:
