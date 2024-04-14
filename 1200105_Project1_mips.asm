@@ -83,6 +83,7 @@ zero_float: .float 0.0   # Define a floating point zero constant in data segment
     upperBoundLDL: .float 100.0
     upperBoundSystolicBPT: .float 120.0
     upperBoundDiastolicBPT: .float 80.0
+    
     floatReturned: .asciiz "float returned is : "
 
 #end of normal and unnormal test ---------------------
@@ -540,7 +541,7 @@ cheack_file_IDs:
 
     beq $t5, 1, check_test_resultNormal
     jal get_next_line
-    beq $t5, 1, menu_loop
+    beq $s7, 1, menu_loop
     j cheack_file_IDs
 
 
@@ -573,10 +574,10 @@ check_test_resultNormal:
                             lwc1 $f4, upperBoundHgb # Load the upper bound value, which is 17.2
 
                             c.lt.s $f1, $f3         # Compare the test result in $f1 with the lower bound $f3
-                            bc1t end_findNextLine   # If the test result is less than the lower bound, branch to end_findNextLine
+                            bc1t if_it_unnormal   # If the test result is less than the lower bound, branch to if_it_unnormal
 
                             c.le.s $f4, $f1         # Compare the test result in $f1 with the upper bound $f4
-                            bc1t end_findNextLine   # If the test result is greater than the upper bound, branch to end_findNextLine
+                            bc1t if_it_unnormal   # If the test result is greater than the upper bound, branch to if_it_unnormal
 
                             move $a0, $t9           # Load the address of the start of the line into $a0
                             jal printLine             # Jump to printLine to print the data for this line
@@ -592,10 +593,10 @@ check_test_resultNormal:
                            lwc1 $f4, upperBoundBGT # Load the upper bound value is 99.0
 
                            c.lt.s $f1, $f3         # Compare the test result in $f1 with the lower bound $f3
-                           bc1t end_findNextLine   # If the test result is less than the lower bound, branch to end_findNextLine
+                           bc1t if_it_unnormal   # If the test result is less than the lower bound, branch to if_it_unnormal
 
                            c.le.s $f4, $f1         # Compare the test result in $f1 with the upper bound $f4
-                           bc1t end_findNextLine   # If the test result is greater than the upper bound, branch to end_findNextLine
+                           bc1t if_it_unnormal   # If the test result is greater than the upper bound, branch to if_it_unnormal
                            
                            move $a0, $t9          # Load the address of the start of the line into $a0
                            jal printLine          # f(a0) print the data for this line 
@@ -607,7 +608,7 @@ check_test_resultNormal:
 
                             lwc1 $f4, upperBoundLDL  # Load the upper bound value of 100.0 into $f3
                             c.le.s $f4, $f1          # Compare the test result in $f1 with the upper bound in $f3
-                            bc1t end_findNextLine    # If $f1 is not less than or equal to $f3 (i.e., $f1 is greater than $f3), branch to end_findNextLine
+                            bc1t if_it_unnormal    # If $f1 is not less than or equal to $f3 (i.e., $f1 is greater than $f3), branch to end_findNextLine
 
                             move $a0, $t9          # Load the address of the start of the line into $a0
                             jal printLine          # f(a0) print the data for this line 
@@ -620,27 +621,186 @@ check_test_resultNormal:
                             lwc1 $f3, upperBoundDiastolicBPT # Load the upper bound value is 80.0
 
                             c.lt.s $f1, $f3         # Compare the test result in $f1 with the lower bound $f3
-                            bc1t end_findNextLine   # If the test result is less than the lower bound, branch to end_findNextLine
+                            bc1t if_it_unnormal   # If the test result is less than the lower bound, branch to if_it_unnormal
 
                             c.le.s $f4, $f1         # Compare the test result in $f1 with the upper bound $f4
-                            bc1t end_findNextLine   # If the test result is greater than the upper bound, branch to end_findNextLine
+                            bc1t if_it_unnormal   # If the test result is greater than the upper bound, branch to if_it_unnormal
 
                             move $a0, $t9          # Load the address of the start of the line into $a0
                             jal printLine         # f(a0) print the data for this line 
 
                             beq $s7, 1, menu_loop
                             j  cheack_file_IDs
+
+
+    if_it_unnormal:
+    
+                  move $a0, $t9          # Load the address of the start of the line into $a0  
+                  jal get_next_line
+                  j cheack_file_IDs_unnormal
+
+                                                    
                             
                         
+    j menu_loop
+
+
+
+search_unnormal_tests:
+
+
+    jal openReadFile # Open the file for reading
+
+
+   # -----------------------------------Loading the buffer with the file content--------------------------------
+
+    li $v0, 14               # sys_read
+    move $a0, $s6            # File descriptor
+    la $a1, buffer           # Pointer to the buffer
+    lw $a2, readSize         # Number of bytes to read
+    syscall
+
+    move $t1, $v0            # Store the number of bytes read in $t1
+    beqz $v0, close_file     # If no bytes were read, end of file has been reached
+
+    # -----------------------------------End of loading the buffer with the file content--------------------------------
+
+
+
+  # Prompt user for the test ID
+    li $v0, 4
+    la $a0, inputPrompt
+    syscall
+
+    # Read the test ID as a string
+    li $v0, 8
+    la $a0, inputBuffer_ID
+    li $a1, 20
+    syscall
+
+
+li $s7, 0 # Initialize the flag to 0
+la $a0, buffer # Load the address of the buffer into $a0
+
+
+cheack_file_IDs_unnormal:
+
+    move $t9, $a0 # Save the address of the start of the buffer in $t7
+
+    jal BoolIDCheck # f(a0 , inputbuffer_ID) retrun 1 in t5 if the ID is equal to the inputBuffer_ID
+
+    #if the t5 = 1 mean the ID is equal to the inputBuffer_ID
+    #else the ID is not equal to the inputBuffer_ID
+
+    beq $t5, 1, check_test_resultUnnormal
+    jal get_next_line
+    beq $s7, 1, menu_loop
+    j cheack_file_IDs_unnormal
+
+
+
+  
+    # Logic for printing the data after ID match
+
+    #normal range for each test
+    #1. Hemoglobin (Hgb): 13.8 to 17.2 grams per deciliter 
+    #2. Blood Glucose Test (BGT): Normal Range Between 70 to 99 milligrams per deciliter (mg/dL) 
+    #3. LDL Cholesterol Low-Density Lipoprotein (LDL): Normal Range Less than 100 mg/dL
+    #4. Blood Pressure Test (BPT): Normal Range: Systolic Blood Pressure: Less than 120 millimeters of 
+    #   mercury (mm Hg). Diastolic Blood Pressure: Less than 80 mm Hg 
+
+check_test_resultUnnormal: 
+
+            move $a0, $t9          # Load the address of the start of the line into $a0
+            jal line_test_values # f(a0) retrun F1 = test result in floating point, t4 = type of test, a0 = start of the next line
+
+            #-----------------------------------sum the values of the test result to calculate the average--------------------------------
+            
+            beq $t4, 1, Hgb_test_unnormal
+            beq $t4, 2, BGT_test_unnormal
+            beq $t4, 3, LDL_test_unnormal
+            beq $t4, 4, BPT_test_unnormal
+
+
+            Hgb_test_unnormal:
+            
+                            lwc1 $f3, lowerBoundHgb # Load the lower bound value, which is 13.8
+                            lwc1 $f4, upperBoundHgb # Load the upper bound value, which is 17.2
+
+                            c.lt.s $f1, $f3         # Compare the test result in $f1 with the lower bound $f3
+                            bc1t printIfUnnormal   # If the test result is less than the lower bound, branch to if_it_unnormal
+
+                            c.le.s $f4, $f1         # Compare the test result in $f1 with the upper bound $f4
+                            bc1t printIfUnnormal   # If the test result is greater than the upper bound, branch to if_it_unnormal
+
+
+                            move $a0, $t9           # Load the address of the start of the line into $a0
+                            jal printLine             # Jump to printLine to print the data for this line
+                            
+                            beq $s7, 1, menu_loop   # If the end of the file is reached, return to the menu
+                            j cheack_file_IDs_unnormal       # Continue to check file IDs							
+                                                        
+                                    
+                    
+            BGT_test_unnormal:
+
+                           lwc1 $f3, lowerBoundBGT # Load the lower bound value is 70.0
+                           lwc1 $f4, upperBoundBGT # Load the upper bound value is 99.0
+
+                           c.lt.s $f1, $f3         # Compare the test result in $f1 with the lower bound $f3
+                           bc1t printIfUnnormal   # If the test result is less than the lower bound, branch to if_it_unnormal
+
+                           c.le.s $f4, $f1         # Compare the test result in $f1 with the upper bound $f4
+                           bc1t printIfUnnormal   # If the test result is greater than the upper bound, branch to if_it_unnormal
+                           
+
+                           beq $s7, 1, menu_loop
+                           j  cheack_file_IDs_unnormal                                        
+
+            LDL_test_unnormal:
+
+ 
+                            lwc1 $f4, upperBoundLDL  # Load the upper bound value of 100.0 into $f3
+                            c.le.s $f4, $f1          # Compare the test result in $f1 with the upper bound in $f3
+                            bc1t printIfUnnormal    # If $f1 is not less than or equal to $f3 (i.e., $f1 is greater than $f3), branch to end_findNextLine
+                           
+                            beq $s7, 1, menu_loop
+                            j  cheack_file_IDs_unnormal         
+                        		
+            BPT_test_unnormal: 
+
+                            lwc1 $f4, upperBoundSystolicBPT # Load the upper bound value is 120.0
+                            lwc1 $f3, upperBoundDiastolicBPT # Load the upper bound value is 80.0
+
+                            c.lt.s $f1, $f3         # Compare the test result in $f1 with the lower bound $f3
+                            bc1t printIfUnnormal   # If the test result is less than the lower bound, branch to if_it_unnormal
+
+                            c.le.s $f4, $f1         # Compare the test result in $f1 with the upper bound $f4
+                            bc1t printIfUnnormal   # If the test result is greater than the upper bound, branch to if_it_unnormal
+
+
+                            beq $s7, 1, menu_loop
+                            j  cheack_file_IDs_unnormal
+
+
+
+              printIfUnnormal:
+                  
+                            move $a0, $t9           # Load the address of the start of the line into $a0
+                            jal printLine             # Jump to printLine to print the data for this line
+                            
+                            beq $s7, 1, menu_loop   # If the end of the file is reached, return to the menu
+                            j cheack_file_IDs_unnormal       # Continue to check file IDs			
+
+                                    
+
+
     j menu_loop
 
 
 retrieve_all_tests_in_period:
     j  menu_loop
 
-
-search_unnormal_tests:
-    j menu_loop
 
 
 average_test_value:
@@ -1294,6 +1454,7 @@ BoolIDCheck:
 findIdInline:
 
     lb $a1, 0($a0)         # Load the byte at the current buffer position into $a1
+    beq $a1, '\0', doneNoIDINfile             # If colon, check if ID matches
     beq $a1, ':', checkIdIfEqual              # If colon, check if ID matches
     addiu $a0, $a0, 1      # Move to the next character in buffer
     addu $t3, $t3, $a1     # Add the ASCII value to the sum for ID comparison
@@ -1313,13 +1474,20 @@ values_equal_OF_IDS :
     move $ra, $t8 # restore the return address
     jr $ra
 
-
+doneNoIDINfile:
+    li $s7 , 1 # set the value of s7 to 1 to indicate that the buffer is done.
+    li $t5, 0
+    move $ra, $t8 # restore the return address
+    jr $ra
 
 #---------------------------------------End of Check Id is equal to the inputBuffer_ID------------------
 
 
 
 #---------------------------------------file Functions area--------------------------------------------
+
+
+#-----------------------------------function to read file--------------------------------------------
 
 openReadFile:
  # Close the file if the search opend at first by user
@@ -1358,6 +1526,11 @@ close_file:
 
 j menu_loop
 
+#-----------------------------------End of function to read file--------------------------------------------
+
+
+
+#-----------------------------------function to print the line of the file--------------------------------
 
 #print the line of the file
 
@@ -1393,8 +1566,14 @@ donePrintingLine:
 doneFile:
     li $s7 , 1 # set the value of s7 to 1 to indicate that the buffer is done.
     jr $ra
+
+
+
+#-----------------------------------End of function to print the line of the file---------------------------
     
         
+#-----------------------------------function to get the next line--------------------------------------------      
+   
 get_next_line:
     # f(a0) return --> in a0 the start of the next line , s7 = 1 if the buffer is done, 0 otherwise
 
@@ -1413,6 +1592,9 @@ get_next_line:
     noNextLIne:
     li $s7 , 1 # set the value of s7 to 1 to indicate that the buffer is done.
     jr $ra
+
+
+#-----------------------------------End of function to get the next line--------------------------------------------
     
     
 
