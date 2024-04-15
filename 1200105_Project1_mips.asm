@@ -97,6 +97,9 @@ main:
 
 menu_loop:
 
+
+    jal openReadFile
+
     # Display menu
     li $v0, 4
     la $a0, menu
@@ -151,8 +154,6 @@ exit_program:
 #----------------------------------------Getting information from the user (Add test) --------------------------------
 
 add_test:
-
-
 
 #----------------------------------------Opening the file for writing----------------------------------------
 
@@ -372,31 +373,7 @@ test_date:
 
 search_test: 
 
-   # Close the file if the search opend at first by user
-    li $v0, 16                 # Syscall: close file
-    move $a0, $s7              # File descriptor
-    syscall
-    
-   # Open the file for reading
-    li $v0, 13               # sys_open
-    la $a0, filename         # Pointer to the filename
-    li $a1, 0                # Flag for reading
-    syscall
-    move $s6, $v0            # Save the file descriptor
-
-    # Check for successful file opening
-    bltz $s6, error_open
-
-
-    li $v0, 14               # sys_read
-    move $a0, $s6            # File descriptor
-    la $a1, buffer           # Pointer to the buffer
-    lw $a2, readSize         # Number of bytes to read
-    syscall
-
-    move $t1, $v0            # Store the number of bytes read in $t1
-    beqz $v0, close_file     # If no bytes were read, end of file has been reached
-
+  
 
   # Prompt user for the test ID
     li $v0, 4
@@ -494,25 +471,6 @@ Done_file_reading:
      
 
 retrieve_all_up_normal_tests:
-
-
-    jal openReadFile # Open the file for reading
-
-
-   # -----------------------------------Loading the buffer with the file content--------------------------------
-
-    li $v0, 14               # sys_read
-    move $a0, $s6            # File descriptor
-    la $a1, buffer           # Pointer to the buffer
-    lw $a2, readSize         # Number of bytes to read
-    syscall
-
-    move $t1, $v0            # Store the number of bytes read in $t1
-    beqz $v0, close_file     # If no bytes were read, end of file has been reached
-
-    # -----------------------------------End of loading the buffer with the file content--------------------------------
-
-
 
   # Prompt user for the test ID
     li $v0, 4
@@ -647,25 +605,6 @@ check_test_resultNormal:
 
 
 search_unnormal_tests:
-
-
-    jal openReadFile # Open the file for reading
-
-
-   # -----------------------------------Loading the buffer with the file content--------------------------------
-
-    li $v0, 14               # sys_read
-    move $a0, $s6            # File descriptor
-    la $a1, buffer           # Pointer to the buffer
-    lw $a2, readSize         # Number of bytes to read
-    syscall
-
-    move $t1, $v0            # Store the number of bytes read in $t1
-    beqz $v0, close_file     # If no bytes were read, end of file has been reached
-
-    # -----------------------------------End of loading the buffer with the file content--------------------------------
-
-
 
   # Prompt user for the test ID
     li $v0, 4
@@ -817,33 +756,6 @@ average_test_value:
     lwc1 $f21, 0($a0)      # Load the floating-point zero into $f21
     lwc1 $f22, 0($a0)      # Load the floating-point zero into $f22
     lwc1 $f23, 0($a0)      # Load the floating-point zero into $f23
-
-
-   # Close the file if the search opend at first by user
-    li $v0, 16                 # Syscall: close file
-    move $a0, $s7              # File descriptor
-    syscall
-    
-   # Open the file for reading
-    li $v0, 13               # sys_open
-    la $a0, filename         # Pointer to the filename
-    li $a1, 0                # Flag for reading
-    syscall
-    move $s6, $v0            # Save the file descriptor
-
-    # Check for successful file opening
-    bltz $s6, error_open
-
-
-    li $v0, 14               # sys_read
-    move $a0, $s6            # File descriptor
-    la $a1, buffer           # Pointer to the buffer
-    lw $a2, readSize         # Number of bytes to read
-    syscall
-
-    move $t1, $v0            # Store the number of bytes read in $t1
-    beqz $v0, close_file     # If no bytes were read, end of file has been reached
-
 
 
 #-----------------------------------Getting the floating-point values from the file--------------------------------
@@ -1517,11 +1429,7 @@ doneNoIDINfile:
 #-----------------------------------function to read file--------------------------------------------
 
 openReadFile:
- # Close the file if the search opend at first by user
-    li $v0, 16                 # Syscall: close file
-    move $a0, $s7              # File descriptor
-    syscall
-    
+
    # Open the file for reading
     li $v0, 13               # sys_open
     la $a0, filename         # Pointer to the filename
@@ -1531,6 +1439,18 @@ openReadFile:
 
     # Check for successful file opening
     bltz $s6, error_open
+
+
+    li $v0, 14               # sys_read
+    move $a0, $s6            # File descriptor
+    la $a1, buffer           # Pointer to the buffer
+    lw $a2, readSize         # Number of bytes to read
+    syscall
+
+   # Close the file
+    li $v0, 16               # sys_close
+    move $a0, $s6            # File descriptor
+    syscall
 
     jr $ra
 
@@ -1543,13 +1463,6 @@ error_open:
     li $v0, 10               # sys_exit
     syscall
 
-
-close_file:
-             
-    # Close the file
-    li $v0, 16               # sys_close
-    move $a0, $s6            # File descriptor
-    syscall
 
 j menu_loop
 
