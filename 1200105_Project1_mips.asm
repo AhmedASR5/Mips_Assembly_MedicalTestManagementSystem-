@@ -1910,18 +1910,17 @@ update_test_resultInLine:
             j find_semicolon_update      # Otherwise, keep looking for semicolons
 
      startUpdating:
-                lb $t0, 0($a0)         # Load the next character from the input string into $t0
-                lb $t1, 0($a1)         # Load the next character from the output string into $t1
+     
+                lb $t0, 0($a0)          # Load the next character from the input string into $t0
+                lb $t1, 0($a1)          # Load the next character from the output string into $t1
 
-                beq $t0, $zero, done_updating  # If input character is NULL (end of string), stop updating
-                beq $t1, $zero, done_updating  # If output character is NULL (end of string), stop updating
+                beq $t0, '\n', fillRemaining # If input character is newline, go to fillRemaining
+                beq $t1, '\n', done_updating # If output character is newline, stop updating
 
                 beq $t0, ' ', skipSpaceInBuffer # Skip input spaces
-                beq $t0, '\n', done_updating   # Stop updating if newline in input
                 beq $t1, ' ', skipSpaceInFloat # Skip output spaces
-                beq $t1, '\n', done_updating   # Stop updating if newline in output
 
-                sb $t1, 0($a0)            # Store the character from input string into output string
+                sb $t1, 0($a0)            # Store the character from the output string into the input string
                 addiu $a0, $a0, 1         # Move to the next character in the input string
                 addiu $a1, $a1, 1         # Move to the next character in the output string
                 j startUpdating           # Jump back to the start of the loop
@@ -1930,14 +1929,22 @@ update_test_resultInLine:
                 addiu $a0, $a0, 1         # Skip one space in the input buffer
                 j startUpdating           # Return to the main loop
 
-             skipSpaceInFloat:
+            skipSpaceInFloat:
                 addiu $a1, $a1, 1         # Skip one space in the output buffer
                 j startUpdating           # Return to the main loop
 
+            fillRemaining:
+                lb $t1, 0($a1)            # Check if there is more data in the output buffer
+                beq $t1, '\n', done_updating # If the next character is newline, finish updating
+                sb $t1, 0($a0)            # Store the remaining characters from output to input buffer
+                addiu $a0, $a0, 1         # Increment input buffer pointer
+                addiu $a1, $a1, 1         # Increment output buffer pointer
+                j fillRemaining           # Continue filling remaining characters
+
             done_updating:
-                jal writeBufferToFile
-                move $ra, $t8 # restore the return address   
-                jr $ra # return to the main function  
+                jal writeBufferToFile     # Function to write buffer to file
+                move $ra, $t8             # restore the return address   
+                jr $ra                    # return to the main function
                                                         # Return from the function
 
 
