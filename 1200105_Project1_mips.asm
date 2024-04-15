@@ -1147,6 +1147,8 @@ update_existing_test_result:
                     # change the value of the test result in the buffer
 
                     move $a0,$t9  # Load the address of the start of the line into $a0
+                    
+                    jal update_test_resultInLine
 
               
 
@@ -1752,11 +1754,6 @@ writeBufferToFile:
                 jr $ra
 
             handle_error:
-                # Handle any errors that occur
-                li $v0, 4                # Print error message (optional, add error message in data segment)
-                la $a0, error_message   # Load address of error message
-                syscall
-
                 li $v0, 10               # Exit program
                 syscall
 
