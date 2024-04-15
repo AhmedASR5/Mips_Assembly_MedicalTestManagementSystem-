@@ -74,7 +74,7 @@ zero_float: .float 0.0   # Define a floating point zero constant in data segment
 
 #end of average test value ---------------------
 
-# for normal and unnormal test ---------------------
+#For normal and unnormal test ---------------------
 
     lowerBoundHgb: .float 13.8
     upperBoundHgb: .float 17.2
@@ -87,6 +87,29 @@ zero_float: .float 0.0   # Define a floating point zero constant in data segment
     floatReturned: .asciiz "float returned is : "
 
 #end of normal and unnormal test ---------------------
+
+#for specific period ---------------------
+
+
+patient_id_period:  .word 0
+first_year:       .word 0
+first_month:      .word 0
+second_year:      .word 0
+second_month:     .word 0
+patient_id_prompt: .asciiz "Please enter patient ID: "
+
+year_prompt: .asciiz "\nEnter year first (as 4 digits yyyy):"
+month_prompt: .asciiz "\nEnter first month (as 2 digits mm): "
+year_prompt2: .asciiz "\nEnter year second (as 4 digits yyyy):"
+month_prompt2: .asciiz "\nEnter second month (as 2 digits mm): "
+
+first_date_prompt: .asciiz "\nEnter the first date (YYYY-MM)"
+second_date_prompt: .asciiz "\nEnter the second date (YYYY-MM)"
+
+
+
+
+#end of specific period -------------------
 
 .text
 .globl main
@@ -732,6 +755,137 @@ check_test_resultUnnormal:
 
 
 retrieve_all_tests_in_period:
+
+
+ 	         #-------------Prompt user for the test ID---------------
+   		 li $v0, 4
+   		 la $a0, inputPrompt
+   		 syscall
+
+   		 # Read the test ID as a string
+    		li $v0, 8
+   		la $a0, inputBuffer_ID
+  		li $a1, 20
+  		  syscall
+ 	       #-------------end Prompt user for the test ID---------------
+ 	       
+ 	       
+                #----------------enter the first date---------------------- 
+                # Prompt user for the first year
+                li $v0, 4
+                la $a0, year_prompt
+                syscall
+
+                # Read integer input for the first year from user
+                li $v0, 5
+                syscall
+                sw $v0, first_year        # Store the first year in memory
+
+                # Prompt user for the first month
+                li $v0, 4
+                la $a0, month_prompt
+                syscall
+
+                # Read integer input for the first month from user
+                li $v0, 5
+                syscall
+                sw $v0, first_month       # Store the first month in memory
+
+                #----------------end of enter the first date-------------------
+
+
+                #----------------enter the second date---------------------- 
+                # Prompt user for the second year
+                li $v0, 4
+                la $a0, year_prompt2
+                syscall
+
+                # Read integer input for the second year from user
+                li $v0, 5
+                syscall
+                sw $v0, second_year       # Store the second year in memory
+
+                # Prompt user for the second month
+                li $v0, 4
+                la $a0, month_prompt2
+                syscall
+
+                # Read integer input for the second month from user
+                li $v0, 5
+                syscall
+                sw $v0, second_month      # Store the second month in memory
+
+                #----------------end of enter the second date-------------------
+
+                #load the buffer address
+                la $a0, buffer # Load the address of the buffer into $a0
+                li $s7, 0 # Initialize the flag to 0
+		
+
+            check_file_IDs_period:
+
+                move $t9, $a0 # Save the address of the start of the buffer in $t7
+
+                jal BoolIDCheck  # f(a0 ,inputBuffer_ID) return equal if t5=1 else not.
+
+                #if the t5 = 1 mean the ID is equal to the patient_id_period
+                #else the ID is not equal to the patient_id_period
+
+                beq $t5, 1, check_test_result_period
+                jal get_next_line
+                beq $s7, 1, menu_loop
+                j check_file_IDs_period
+
+
+
+            check_test_result_period:
+                
+                    move $a0, $t9          # Load the address of the start of the line into $a0
+                    jal LineYearMonthExtraction # f(a0) will return the year and month of the test result in t6 and t7
+
+                    lw $s0, first_year                # Load the start year
+                    lw $s1, first_month               # Load the start month
+                    lw $s2, second_year               # Load the end year
+                    lw $s3, second_month              # Load the end month
+
+                    # Compare year first
+                    slt $t0, $t6, $s0                 # $t0 = 1 if test year is less than start year
+                    bne $t0, $zero, skip_print        # Skip printing if test year is less than start year
+
+                    slt $t0, $s2, $t6                 # $t0 = 1 if end year is less than test year
+                    bne $t0, $zero, skip_print        # Skip printing if test year is greater than end year
+
+                    # If years are equal, check months
+                    beq $t6, $s0, check_month_lower   # Branch to check if start month is valid
+                    beq $t6, $s2, check_month_upper   # Branch to check if end month is valid
+
+                    # Print the line if year is within range and month check is not needed
+                    j print_line_valid_year_month
+
+                check_month_lower:
+                    slt $t0, $t7, $s1                 # $t0 = 1 if test month is less than start month
+                    bne $t0, $zero, skip_print        # Skip printing if test month is less than start month
+                    j print_line_valid_year_month
+
+                check_month_upper:
+                    slt $t0, $s3, $t7                 # $t0 = 1 if end month is less than test month
+                    bne $t0, $zero, skip_print        # Skip printing if test month is greater than end month
+                    j print_line_valid_year_month
+
+
+                print_line_valid_year_month:
+
+                    move $a0, $t9                     # Load the address of the start of the line into $a0
+                    jal printLine                     # Function to print the line if it's within the date range
+                    beq $s7, 1, menu_loop             # If the end of the file is reached, return to the menu
+                    j check_file_IDs_period           # Continue to check file IDs
+
+                skip_print:
+                    jal get_next_line
+                    beq $s7, 1, menu_loop
+                    j check_file_IDs_period
+        
+
     j  menu_loop
 
 
@@ -1529,9 +1683,66 @@ get_next_line:
 
 
 #-----------------------------------End of function to get the next line--------------------------------------------
-    
-    
 
+
+#-----------------------------------function to extract year-month from the line------------------------------------
+
+LineYearMonthExtraction:
+
+#this funtion will take a0 and return the year and month in t6 and t7 respectively
+
+#f(a0) return --> in t6 = year, t7 = month
+
+#example :
+
+# 1200105:LDL, 2002-22, 6.0 line
+
+# f(a0)  Return --> t6 = 2002, t7 = 22 , a0 = end of month year (recommanded not to use it).
+
+# the function will start from the first comma after the ID and will stop at the second comma 
+
+move $t8, $ra # save the return address
+li $t6, 0 # rest the value of year
+li $t7, 0 # rest the value of month
+
+find_commma_for_year_month:
+
+    lb $t0, 0($a0)        # Load the next character from the input string into $t0
+    beq $t0, ',', extract_year # If colon, check if ID matches
+    addiu $a0, $a0, 1      # Move to the next character in the input string
+
+    j find_commma_for_year_month      # Jump back to the start of the loop
+
+extract_year:
+    
+        addiu $a0, $a0, 1      # Move to the next character in the input string
+        lb $t0, 0($a0)        # Load the next character from the input string into $t0
+        beq $t0, '-', extract_month # If - 
+        beq $t0, ' ', extract_year # If newline, done parsing
+        sub $t0, $t0, '0'      # Convert from ASCII to integer
+        mul $t6, $t6, 10       # Multiply current result by 10
+        add $t6, $t6, $t0      # Add the new digit
+
+        j extract_year
+
+extract_month:
+
+    addiu $a0, $a0, 1      # Move to the next character in the input string
+    lb $t0, 0($a0)        # Load the next character from the input string into $t0
+    beq $t0, ',', done_extract_month # If comma, done parsing
+    sub $t0, $t0, '0'      # Convert from ASCII to integer
+    mul $t7, $t7, 10       # Multiply current result by 10
+    add $t7, $t7, $t0      # Add the new digit
+
+    j extract_month
+
+
+done_extract_month: 
+
+    move $ra, $t8 # restore the return address
+    jr $ra
+        
+                
 
 #---------------------------------------End of file Functions area--------------------------------------------
 
