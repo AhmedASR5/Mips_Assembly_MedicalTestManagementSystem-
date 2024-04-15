@@ -1057,6 +1057,110 @@ find_the_avg:
 
 
 update_existing_test_result:
+
+ 
+
+                #---------------Prompt user for the test ID---------------
+                li $v0, 4
+                la $a0, inputPrompt
+                syscall
+
+                # Read the test ID as a string
+                    li $v0, 8
+                la $a0, inputBuffer_ID
+                li $a1, 20
+                syscall
+                #-------------end Prompt user for the test ID---------------
+ 	       
+ 	       
+                #----------------enter the first date---------------------- 
+                # Prompt user for the first year
+                li $v0, 4
+                la $a0, year_prompt
+                syscall
+
+                # Read integer input for the first year from user
+                li $v0, 5
+                syscall
+                sw $v0, first_year        # Store the first year in memory
+
+                # Prompt user for the first month
+                li $v0, 4
+                la $a0, month_prompt
+                syscall
+
+                # Read integer input for the first month from user
+                li $v0, 5
+                syscall
+                sw $v0, first_month       # Store the first month in memory
+
+                #----------------end of enter the first date-------------------
+
+                #load the buffer address
+                la $a0, buffer # Load the address of the buffer into $a0
+                li $s7, 0 # Initialize the flag to 0
+		
+
+            check_file_IDs_Update:
+
+                move $t9, $a0 # Save the address of the start of the buffer in $t7
+
+                jal BoolIDCheck  # f(a0 ,inputBuffer_ID) return equal if t5=1 else not.
+
+                #if the t5 = 1 mean the ID is equal to the patient_id_period
+                #else the ID is not equal to the patient_id_period
+
+                beq $t5, 1, check_test_result_update
+                jal get_next_line
+                beq $s7, 1, menu_loop
+                j check_file_IDs_Update
+
+
+
+            check_test_result_update:
+                
+                    move $a0, $t9          # Load the address of the start of the line into $a0
+                    jal LineYearMonthExtraction # f(a0) will return the year and month of the test result in t6 and t7
+
+                    lw $s0, first_year                # Load the start year
+                    lw $s1, first_month               # Load the start month
+                    
+                    bne $t6, $s0, skip_edit
+                    bne $t7, $s1, skip_edit
+
+                   
+             
+                    #-----------------Prompt user for the new test result----------------------
+
+                    
+                    # Prompt the user for input
+                    li $v0, 4                  # Syscall for print string
+                    la $a0, promptTestResult             # Address of prompt string
+                    syscall
+
+
+                    li $v0, 8                  # Syscall code for reading a string
+                    la $a0, floatBuffer       # Address of buffer to store the string
+                    li $a1, 8                 # The maximum number of characters to read
+                    syscall
+
+                    # change the value of the test result in the buffer
+
+                    move $a0,$t9  # Load the address of the start of the line into $a0
+
+              
+
+                                                                                                       
+                    j menu_loop          
+
+                skip_edit:
+                    jal get_next_line
+                    beq $s7, 1, menu_loop
+                    j check_file_IDs_Update
+        
+
+
+
     j menu_loop
 
 
@@ -1614,6 +1718,48 @@ error_open:
 
 j menu_loop
 
+
+#writing new buffer to the file
+
+writeBufferToFile:
+            # Open the file for writing (create if not exists, truncate if exists)
+                li $v0, 13               # System call for open file
+                la $a0, filename         # Address of the filename to open
+                li $a1, 577              # Flags for writing (0x001 | 0x200 | 0x040: create, truncate, write)
+                li $a2, 0644             # Mode (user read/write, others read)
+                syscall
+                move $s6, $v0            # Save the file descriptor in $s6
+
+                # Check for a valid file descriptor
+                bltz $s6, handle_error   # If $s6 is negative, an error occurred during file opening
+
+                # Write the buffer to the file
+                li $v0, 15               # System call for write to file
+                move $a0, $s6            # File descriptor
+                la $a1, buffer           # Address of buffer containing data
+                li $a2, 1024             # Number of bytes to write (assumed buffer is fully used)
+                syscall
+                move $t1, $v0            # Save the number of bytes written to $t1
+
+                # Check if the file write was successful
+                bltz $t1, handle_error   # If $t1 is negative, an error occurred during file write
+
+                # Close the file
+                li $v0, 16               # System call for close file
+                move $a0, $s6            # File descriptor to close
+                syscall
+
+                jr $ra
+
+            handle_error:
+                # Handle any errors that occur
+                li $v0, 4                # Print error message (optional, add error message in data segment)
+                la $a0, error_message   # Load address of error message
+                syscall
+
+                li $v0, 10               # Exit program
+                syscall
+
 #-----------------------------------End of function to read file--------------------------------------------
 
 
@@ -1741,6 +1887,64 @@ done_extract_month:
 
     move $ra, $t8 # restore the return address
     jr $ra
+
+#-----------------------------------End of function to extract year-month from the line------------------------------------
+
+#-----------------------------------update the test result in the buffer--------------------------------------------
+
+update_test_resultInLine:
+
+         li $t2, 0 # rest the value of asscii sum.
+         move $t8, $ra # save the return address
+         la $a1, floatBuffer # Load the address of the input string into $a1
+
+        find_semicolon_update:
+             lb $t0, 0($a0)        # Load the next character from the input string into $t0
+            li $t1, ','           # Load the ASCII value of semicolon into $t1
+             beq $t0, $t1, increment_counter_update # If the current character is a semicolon, increment the counter
+            addiu $a0, $a0, 1     # Move to the next character in the input string
+            j find_semicolon_update      # Jump back to the start of the loop
+
+         increment_counter_update:
+            addiu $t2, $t2, 1     # Increment the semicolon counter
+            addiu $a0, $a0, 1     # Move past the semicolon
+            li $t3, 2             # We're looking for the second semicolon
+            beq $t2, $t3, startUpdating # If we've found the second semicolon, start updating the value
+            j find_semicolon_update      # Otherwise, keep looking for semicolons
+
+     startUpdating:
+                lb $t0, 0($a0)         # Load the next character from the input string into $t0
+                lb $t1, 0($a1)         # Load the next character from the output string into $t1
+
+                beq $t0, $zero, done_updating  # If input character is NULL (end of string), stop updating
+                beq $t1, $zero, done_updating  # If output character is NULL (end of string), stop updating
+
+                beq $t0, ' ', skipSpaceInBuffer # Skip input spaces
+                beq $t0, '\n', done_updating   # Stop updating if newline in input
+                beq $t1, ' ', skipSpaceInFloat # Skip output spaces
+                beq $t1, '\n', done_updating   # Stop updating if newline in output
+
+                sb $t1, 0($a0)            # Store the character from input string into output string
+                addiu $a0, $a0, 1         # Move to the next character in the input string
+                addiu $a1, $a1, 1         # Move to the next character in the output string
+                j startUpdating           # Jump back to the start of the loop
+
+            skipSpaceInBuffer:
+                addiu $a0, $a0, 1         # Skip one space in the input buffer
+                j startUpdating           # Return to the main loop
+
+             skipSpaceInFloat:
+                addiu $a1, $a1, 1         # Skip one space in the output buffer
+                j startUpdating           # Return to the main loop
+
+            done_updating:
+                jal writeBufferToFile
+                move $ra, $t8 # restore the return address   
+                jr $ra # return to the main function  
+                                                        # Return from the function
+
+
+ #-----------------------------------End of update the test result in the buffer--------------------------------------------                                                       
         
                 
 
