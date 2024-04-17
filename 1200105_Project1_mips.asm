@@ -48,11 +48,15 @@ newline: .asciiz "\n"
 # for search test by ID ---------------------
 
 buffer: .space 1024    # Increase buffer size if needed, but ensure it matches the read size below.
+buffer_temp: .space 1024   # use it in udpate test result
 readSize: .word 2024    # Number of bytes to read at a time; adjust as per buffer size.
 
 inputPrompt: .asciiz "\nEnter the Patient ID'): "
 inputBuffer_ID: .space 11  # Buffer for search id 
 error_msg: .asciiz "Failed to open the file.\n"
+
+test_result_found: .asciiz "The test result is found successfully.\n"
+
 
 #end of search test by ID ---------------------
 
@@ -107,9 +111,21 @@ first_date_prompt: .asciiz "\nEnter the first date (YYYY-MM)"
 second_date_prompt: .asciiz "\nEnter the second date (YYYY-MM)"
 
 
-
-
 #end of specific period -------------------
+
+
+#for update test result ---------------------
+
+address_of_test_vlaue_to_change: .word 0
+user_test_new_value: .word 0
+not_found_update: .asciiz "The test recorde is not found in the file.\n Please try again.\n"
+test_result_updated_promt: .asciiz "The test result is updated successfully.\n"
+bool_found: .word 0 
+end_target_line_address: .word 0
+
+
+
+#end of update test result -------------------
 
 .text
 .globl main
@@ -397,7 +413,6 @@ test_date:
 search_test: 
 
   
-
   # Prompt user for the test ID
     li $v0, 4
     la $a0, inputPrompt
@@ -409,86 +424,91 @@ search_test:
     li $a1, 20
     syscall
 
-    # Search for the test ID in the buffer
 
-    
- # Initialize $t3 with 0 for summing ASCII values of inputBuffer_ID
-    li $t3, 0
-    la $a0, inputBuffer_ID
-    jal calculateSum       # Calculate sum of ASCII values in inputBuffer_ID
-    move $t5, $v0          # Move result to $t5
-
-    # Reset $t3 to 0 for use in comparing with each ID in buffer
-    li $t3, 0
-    la $a0, buffer         # Load address of the start of the buffer into $a0
-    la $t7, buffer         # Initialize $t7 with the start of the buffer
-
-loopPrintChar:
-
-    lb $a1, 0($a0)         # Load the byte at the current buffer position into $a1
-    beq $a1, ':', checkID              # If colon, check if ID matches
-
-    addu $t3, $t3, $a1     # Add the ASCII value to the sum for ID comparison
-    addiu $a0, $a0, 1      # Move to the next character in buffer
-    j loopPrintChar
-
-checkID:
-    
-    beq $t5, $t3, values_equal # Compare sum of ASCII values
-    # If not equal, find the start of the next line
-    jal findNextLine
-    j loopPrintChar
-
-values_equal:
-    # Logic for printing the data after ID match
-
-    move $a0, $t7          # Load the address of the start of the line into $a0
-    j printData
-
-findNextLine:
-
-    # Find the start of the next line
-    lb $a1, 0($a0)
-    beq $a1, '\n', end_findNextLine    # New line found, prepare to process next ID
-    addiu $a0, $a0, 1      # Move to the next character in buffer
-    
-    lb $a1, 0($a0)
-    beq $a1, '\0', Done_file_reading  # Check for end of buffer
-    
-    j findNextLine
-    
-end_findNextLine:
-    addiu $a0, $a0, 1      # Skip the newline character
-    li $t3, 0              # Reset the sum for next ID
-    move $t7, $a0          # Update the start of the next line
-    j loopPrintChar        # Continue with next ID
-
-printData:
-    lb $a1, 0($a0)
-    beq $a1, '\n', GoNextLine  # End of data for this ID
-    move $a0, $a1
-    li $v0, 11             # syscall for printing character
-    syscall
-    
-    addiu $t7, $t7, 1      # Move to the next character in buffer
-    move $a0, $t7          # Load the address of the start of the line into $a0
-   
-    j printData            # Continue printing data
-    
-GoNextLine:
-    move $a0, $a1
-    li $v0, 11             # syscall for printing character
-    syscall
-    addiu $t7, $t7, 1
-    move $a0, $t7 
-    li $t3, 0              # Reset the sum for next ID
-    lb $a1, 0($a0)
-    beq $a1, '\0', Done_file_reading  # Check for end of buffer
-     
- j loopPrintChar
+li $s7, 0 # Initialize the flag to 0
+la $a0, buffer # Load the address of the buffer into $a0
 
 
-Done_file_reading:
+cheack_for_patient_ID_to_retrieve:
+
+    move $t9, $a0 # Save the address of the start of the buffer in $t7
+
+    jal BoolIDCheck # f(a0 , inputbuffer_ID) retrun 1 in t5 if the ID is equal to the inputBuffer_ID
+
+    #if the t5 = 1 mean the ID is equal to the inputBuffer_ID
+    #else the ID is not equal to the inputBuffer_ID
+
+    beq $t5, 1, print_id_match
+    jal get_next_line
+    beq $s7, 1, check_founded_bool_retreive_all_tests
+    j cheack_for_patient_ID_to_retrieve
+
+
+
+  
+print_id_match: 
+          
+            
+                              #store in bool_found the value 1 to indicate that the test result is found
+          li $t1, 1
+          sw $t1, bool_found
+          move $a0, $t9           # Load the address of the start of the line into $a0
+          jal printLine             # Jump to printLine to print the data for this line                 
+          beq $s7, 1, check_founded_bool_retreive_all_tests   # If the end of the file is reached, return to the menu
+          j cheack_for_patient_ID_to_retrieve       # Continue to check file IDs
+
+
+  check_founded_bool_retreive_all_tests:
+
+            #if the bool_found = 1 mean the test result is found and updated
+            #else the test result is not found and not updated
+
+            lw $t1, bool_found
+            beq $t1, 1, retrieved_all_tests_to_print
+
+            #if the test result is not found
+
+            #print new line character
+
+            li $v0, 11          # System call for printing a character
+            li $a0, 10          # Load ASCII value of newline ('\n') into $a0
+            syscall
+
+
+            li $v0, 4
+            la $a0, not_found_update
+            syscall
+
+            li $v0, 11          # System call for printing a character
+            li $a0, 10          # Load ASCII value of newline ('\n') into $a0
+            syscall
+
+            j menu_loop
+
+            
+      
+        retrieved_all_tests_to_print:
+
+                li $v0, 11          # System call for printing a character
+                li $a0, 10          # Load ASCII value of newline ('\n') into $a0
+                syscall        
+                
+                li $v0, 4
+                la $a0, test_result_found
+                syscall
+
+                li $v0, 11          # System call for printing a character
+                li $a0, 10          # Load ASCII value of newline ('\n') into $a0
+                syscall
+
+                #reset the bool_found to 0
+                li $t1, 0
+                sw $t1, bool_found
+
+                j menu_loop							
+                                                        
+                                                                                           
+                        
      j menu_loop
      
      
@@ -1073,6 +1093,64 @@ update_existing_test_result:
                 #-------------end Prompt user for the test ID---------------
  	       
  	       
+
+
+                #-----------------------------------Selecting the test name--------------------------------
+                not_valid_choice:
+                   #promt
+                    li $v0, 4
+                    la $a0, menuTestNames
+                    syscall
+
+                    # Read user's choice
+                    li $v0, 5
+                    syscall
+                    move $t0, $v0  # Move user's choice into $t0
+
+                    # Compare user's choice and jump to the corresponding procedure
+
+                    li $t1, 1
+                    beq $t0, $t1, hemoglobin_label_test_value
+
+                    li $t1, 2
+                    beq $t0, $t1, blood_glucose_test_label_test_value
+
+                    li $t1, 3
+                    beq $t0, $t1, ldl_cholesterol_label_test_value
+
+                    li $t1, 4
+                    beq $t0, $t1, blood_pressure_test_label_test_value
+
+                  
+                    # If invalid option, show error and go back to menu
+                    li $v0, 4
+                    la $a0, promptInvalid
+                    syscall
+                    j test_name
+
+                    # load the valu of each test name in user_test_new_value
+
+                    hemoglobin_label_test_value:
+                    li $t1, 0x111        # ASCII sum for "Hgb"
+                    sw $t1, user_test_new_value
+                    j goto_date
+                          
+                    
+                    blood_glucose_test_label_test_value:
+                    li $t1, 0xDD         # ASCII sum for "BGT"
+                    sw $t1, user_test_new_value
+                    j goto_date
+                           
+                    ldl_cholesterol_label_test_value: 
+                    li $t1, 0xDC         # ASCII sum for "LDL"
+                    sw $t1, user_test_new_value
+                    j goto_date
+                    
+                    blood_pressure_test_label_test_value:
+                    li $t1, 0xE6         # ASCII sum for "BPT"
+                    sw $t1, user_test_new_value
+                          
+                goto_date: 
                 #----------------enter the first date---------------------- 
                 # Prompt user for the first year
                 li $v0, 4
@@ -1096,6 +1174,8 @@ update_existing_test_result:
 
                 #----------------end of enter the first date-------------------
 
+                     
+    
                 #load the buffer address
                 la $a0, buffer # Load the address of the buffer into $a0
                 li $s7, 0 # Initialize the flag to 0
@@ -1112,7 +1192,7 @@ update_existing_test_result:
 
                 beq $t5, 1, check_test_result_update
                 jal get_next_line
-                beq $s7, 1, menu_loop
+                beq $s7, 1, check_founded_bool_update
                 j check_file_IDs_Update
 
 
@@ -1128,8 +1208,16 @@ update_existing_test_result:
                     bne $t6, $s0, skip_edit
                     bne $t7, $s1, skip_edit
 
-                   
-             
+                
+                    move $a0, $t9          # Load the address of the start of the line into $a0
+                    li $t5, 0 # reset the value of t5 to 0
+                    jal boolTestNameCheck # f(a0 , user_test_new_value) return equal if t5=1 else not.
+                    bne $t5, 1, skip_edit # if t5 = 0 mean the test name is not equal to the user_test_new_value if t5 = 1 mean the test name is equal to the user_test_new_value
+
+                    #store in bool_found the value 1 to indicate that the test result is found
+                    li $t1, 1
+                    sw $t1, bool_found
+
                     #-----------------Prompt user for the new test result----------------------
 
                     
@@ -1157,8 +1245,60 @@ update_existing_test_result:
 
                 skip_edit:
                     jal get_next_line
-                    beq $s7, 1, menu_loop
+                    beq $s7, 1, check_founded_bool_update
                     j check_file_IDs_Update
+
+
+
+
+        check_founded_bool_update:
+
+            #if the bool_found = 1 mean the test result is found and updated
+            #else the test result is not found and not updated
+
+            lw $t1, bool_found
+            beq $t1, 1, test_result_updated
+
+            #if not found the record for update the test result print the message
+
+            #print new line character
+
+            li $v0, 11          # System call for printing a character
+            li $a0, 10          # Load ASCII value of newline ('\n') into $a0
+            syscall
+
+
+            li $v0, 4
+            la $a0, not_found_update
+            syscall
+
+            li $v0, 11          # System call for printing a character
+            li $a0, 10          # Load ASCII value of newline ('\n') into $a0
+            syscall
+
+            j menu_loop
+
+            
+      
+        test_result_updated:
+
+                li $v0, 11          # System call for printing a character
+                li $a0, 10          # Load ASCII value of newline ('\n') into $a0
+                syscall        
+                
+                li $v0, 4
+                la $a0, test_result_updated_promt
+                syscall
+
+                li $v0, 11          # System call for printing a character
+                li $a0, 10          # Load ASCII value of newline ('\n') into $a0
+                syscall
+
+                #reset the value of bool_found to 0
+                li $t1, 0
+                sw $t1, bool_found
+
+                j menu_loop
         
 
 
@@ -1891,9 +2031,29 @@ done_extract_month:
 
 update_test_resultInLine:
 
+
+
          li $t2, 0 # rest the value of asscii sum.
          move $t8, $ra # save the return address
          la $a1, floatBuffer # Load the address of the input string into $a1
+
+           move $s0, $a0
+
+            loop_find_end_of_line:
+                                 
+                lb $t0, 0($s0)        # Load the next character from the input string into $t0
+                beq $t0, '\n', end_find_end_of_line # If newline, end of line
+                addiu $s0, $s0, 1      # Move to the next character in the input string
+                j loop_find_end_of_line      # Jump back to the start of the loop
+
+                end_find_end_of_line:
+                # save the end of this line address in end_target_line_address variable
+                addiu $s0, $s0, 1
+                sw $s0, end_target_line_address # store the start of the next line in the buffer
+
+                jal copy_buffer # when we reach the end of main buffer line we copy the buffer for extend cases 
+                # it returns in end_target_line_address the start of the next line of the copied buffer.
+                
 
         find_semicolon_update:
              lb $t0, 0($a0)        # Load the next character from the input string into $t0
@@ -1909,8 +2069,13 @@ update_test_resultInLine:
             beq $t2, $t3, startUpdating # If we've found the second semicolon, start updating the value
             j find_semicolon_update      # Otherwise, keep looking for semicolons
 
+            #this loop to find the end of the line of a0 and store it in end_target_line_address
+           
      startUpdating:
-     
+
+                #store the address of the test value to change
+                sw $a0, address_of_test_vlaue_to_change
+
                 lb $t0, 0($a0)          # Load the next character from the input string into $t0
                 lb $t1, 0($a1)          # Load the next character from the output string into $t1
 
@@ -1934,25 +2099,166 @@ update_test_resultInLine:
                 j startUpdating           # Return to the main loop
 
             fillRemaining:
+
                 lb $t1, 0($a1)            # Check if there is more data in the output buffer
                 beq $t1, '\n', done_updating # If the next character is newline, finish updating
                 sb $t1, 0($a0)            # Store the remaining characters from output to input buffer
                 addiu $a0, $a0, 1         # Increment input buffer pointer
                 addiu $a1, $a1, 1         # Increment output buffer pointer
-                j fillRemaining           # Continue filling remaining characters
+                j fillRemaining      # Continue filling remaining characters
 
             done_updating:
+            
+                sb $t1, 0($a0)           # Store the newline character in the buffer
+                addiu $a0, $a0, 1         # Move to the next position in the buffer
+                lw $s1, end_target_line_address
+
+                # now we have the address of copied buffer in s1 and we want to paste it in a0 
+
+                loop_paste_buffer:
+                lb $t0, 0($s1)        # Load the next character from the buffer into $t0
+                beq $t0, '\0', finish_paste_buffer # If null terminator, finish pasting
+                sb $t0, 0($a0)        # Store the character in the buffer
+                addiu $a0, $a0, 1     # Move to the next character in the buffer
+                addiu $s1, $s1, 1     # Move to the next character in the copy_buffer
+                j loop_paste_buffer   # Jump back to the start of the loop
+
+                finish_paste_buffer:
+                sb $t0, 0($a0)
+                
                 jal writeBufferToFile     # Function to write buffer to file
                 move $ra, $t8             # restore the return address   
                 jr $ra                    # return to the main function
                                                         # Return from the function
 
 
- #-----------------------------------End of update the test result in the buffer--------------------------------------------                                                       
-        
+ #-----------------------------------End of update the test result in the buffer--------------------------------------------
+
+ #-----------------------------------bool test name check--------------------------------------------
+
+boolTestNameCheck:
+
+            move $t8, $ra # save the return address
+
+    
+            #load the value of the test name to check user_test_new_value to s0
+
+            find_semicolon_for_test_name_check:
+
+                lb $t0, 0($a0)        # Load the next character from the input string into $t0
+                beq $t0, ':', check_test_name # If colon, test name matche
+                addiu $a0, $a0, 1     # Move to the next character in the input string
+                j find_semicolon_for_test_name_check      # Jump back to the start of the loop
+
+
+                check_test_name: 
+                li $t3, 0 # rest the value of asscii sum. 
+
+                get_asscii_sum_of_test_name:
+
+                addiu $a0, $a0, 1      # Skip the : character
+                lb $t0, 0($a0)        # Load the next character from the input string into $t0
+                beq $t0, ' ', get_asscii_sum_of_test_name # Check for the end of the string
                 
+                # sum the ascii values of the test name to choose the test value to calculate the average
+                beq $t0, ',', compare_test_name # If colon, have unique value for each test name 
+                addu $t3, $t3, $t0     # Add the ASCII value to the sum for test name comparison
+                    
+                jal get_asscii_sum_of_test_name
+
+                compare_test_name:
+
+                    # Check the sum of the ASCII values to determine the test name
+                    li $t1, 0x111        # ASCII sum for "Hgb"
+                    beq $t3, $t1, Hgb_test_check # If the sum matches "Hgb", jump to Hgb_test
+
+                    li $t1, 0xDD         #  ASCII sum for "BGT"
+                    beq $t3, $t1, BGT_test_check # If the sum matches "BGT", jump to BGT_test
+
+                    li $t1, 0xDC        #  ASCII sum for "LDL"
+                    beq $t3, $t1, LDL_test_check # If the sum matches "LDL", jump to LDL_test
+
+                    li $t1, 0xE6         #  ASCII sum for "BPT"
+                    beq $t3, $t1, BPT_test_check # If the sum matches "BPT", jump to BPT_test
+
+                #return unique value for each test name
+
+                    Hgb_test_check:
+                    la $a0, user_test_new_value   # Load address of the value of the test result into $a0
+                    lw $s0 , 0($a0) # load the value of the test result to s0
+                    # compare the test name with the user_test_new_value
+                    #then return to ra in t8
+                    beq $s0,$t1 , equal_test_name # If the test name matches the user_test_new_value, return 1
+
+                    BGT_test_check:
+                    la $a0, user_test_new_value   # Load address of the value of the test result into $a0
+                    lw $s0 , 0($a0) # load the value of the test result to s0
+                    beq $s0,$t1 , equal_test_name # If the test name matches the user_test_new_value, return 1
+                  
+
+                    LDL_test_check:
+                    la $a0, user_test_new_value   # Load address of the value of the test result into $a0
+                    lw $s0 , 0($a0) # load the value of the test result to s0
+                    beq $s0,$t1 , equal_test_name # If the test name matches the user_test_new_value, return 1
+                  
+                    BPT_test_check:
+                    la $a0, user_test_new_value   # Load address of the value of the test result into $a0
+                    lw $s0 , 0($a0) # load the value of the test result to s0
+                    beq $s0,$t1 , equal_test_name # If the test name matches the user_test_new_value, return 1
+
+
+                    move $ra, $t8 # no match return 0
+                    li $t5, 0
+                    jr $ra
+                    
+
+                    equal_test_name:
+                    li $t5, 1
+                    move $ra, $t8 # restore the return address
+                    jr $ra
+                    
+   
+#-----------------------------------copy buffer function-----------------------------------------------------
+
+copy_buffer:
+
+            #This function will copy the buffer to another buffer and save the address we want to continue the buffer from it.
+
+            la $s0 , buffer # Load the address of the buffer into $s0
+            la $s1 , buffer_temp # Load the address of the copy_buffer into $s1
+            #load the value of end_target_line_address into s2
+            lw $s2 , end_target_line_address
+
+            copy_loopBuffer:
+                lb $t0, 0($s0)        # Load the next character from the buffer into $t0
+                beq $t0, '\0', done_copy # If null terminator, done copying
+                beq $s0, $s2, save_for_copy_to_continue # If end of the line, save the address
+                sb $t0, 0($s1)        # Store the character in the copy_buffer
+                addiu $s0, $s0, 1     # Move to the next character in the buffer
+                addiu $s1, $s1, 1     # Move to the next character in the copy_buffer
+                j copy_loopBuffer           # Continue copying
+
+
+                save_for_copy_to_continue:
+                sw $s1, end_target_line_address
+                sb $t0, 0($s1)        # Store the character in the copy_buffer
+                addiu $s0, $s0, 1     # Move to the next character in the buffer
+                addiu $s1, $s1, 1     # Move to the next character in the copy_buffer
+                
+                j copy_loopBuffer
+
+            done_copy:
+                jr $ra                # Return from the function
+
+            
+
+
+
+#-----------------------------------end copy buffer function--------------------------------------------------
 
 #---------------------------------------End of file Functions area--------------------------------------------
+
+
 
 
 
