@@ -17,7 +17,7 @@ testDate: .space 9  # Space for "YYYY-MM" + null terminator
 
 promptTestResult: .asciiz "\nEnter Test Result (as a floating-point number): "
 .align 3  # Align the next data declaration on a doubleword boundary
-floatBuffer: .space 8  # Reserve 8 bytes for storing a double-precision float
+floatBuffer: .space 20  # Reserve 8 bytes for storing a double-precision float
 
 
 msgValid: .asciiz "\nValid ID.\n"
@@ -328,7 +328,7 @@ test_date:
 
     li $v0, 8                  # Syscall code for reading a string
     la $a0, floatBuffer       # Address of buffer to store the string
-    li $a1, 8                 # The maximum number of characters to read
+    li $a1, 20                 # The maximum number of characters to read
     syscall
 
 #----------------------------------- writing the information to the file--------------------------------
@@ -377,7 +377,7 @@ test_date:
     li $v0, 15                 # Syscall for write to file
     move $a0, $s7             
     la $a1, floatBuffer      
-    li $a2, 8 
+    li $a2, 20
     syscall
 
 
@@ -1229,7 +1229,7 @@ update_existing_test_result:
 
                     li $v0, 8                  # Syscall code for reading a string
                     la $a0, floatBuffer       # Address of buffer to store the string
-                    li $a1, 8                 # The maximum number of characters to read
+                    li $a1, 20                # The maximum number of characters to read
                     syscall
 
                     # change the value of the test result in the buffer
@@ -1864,22 +1864,39 @@ j menu_loop
 #writing new buffer to the file
 
 writeBufferToFile:
+
+            #count for number of bytes written in buffer
+
+                    la $a0, buffer           # Load the address of the buffer into $a0
+                    li $t1, 0                # Initialize the byte count to 0
+
+                    count_loop:
+                        lb $t0, 0($a0)        # Load the next byte from the buffer into $t0
+                        beq $t0, '\0', done_counting # If null terminator, we're done
+                        addiu $t1, $t1, 1      # Increment the byte count
+                        addiu $a0, $a0, 1      # Move to the next byte
+                        j count_loop           # Repeat the loop
+
+                    done_counting:
+
+                    move $t2, $t1            # Save the number of bytes in $t2
+
+
             # Open the file for writing (create if not exists, truncate if exists)
                 li $v0, 13               # System call for open file
                 la $a0, filename         # Address of the filename to open
-                li $a1, 577              # Flags for writing (0x001 | 0x200 | 0x040: create, truncate, write)
-                li $a2, 0644             # Mode (user read/write, others read)
+                li $a1, 1             # Flags for writing (0x001 | 0x200 | 0x040: create, truncate, write
                 syscall
-                move $s6, $v0            # Save the file descriptor in $s6
+                move $s1, $v0            # Save the file descriptor in $s6
 
                 # Check for a valid file descriptor
-                bltz $s6, handle_error   # If $s6 is negative, an error occurred during file opening
+                bltz $s1, handle_error   # If $s6 is negative, an error occurred during file opening
 
                 # Write the buffer to the file
                 li $v0, 15               # System call for write to file
-                move $a0, $s6            # File descriptor
+                move $a0, $s1            # File descriptor
                 la $a1, buffer           # Address of buffer containing data
-                li $a2, 1024             # Number of bytes to write (assumed buffer is fully used)
+                move $a2, $t2              # Number of bytes to write from buffer
                 syscall
                 move $t1, $v0            # Save the number of bytes written to $t1
 
@@ -1888,7 +1905,7 @@ writeBufferToFile:
 
                 # Close the file
                 li $v0, 16               # System call for close file
-                move $a0, $s6            # File descriptor to close
+                move $a0, $s1            # File descriptor to close
                 syscall
 
                 jr $ra
@@ -2073,14 +2090,10 @@ update_test_resultInLine:
            
      startUpdating:
 
-                #store the address of the test value to change
-                sw $a0, address_of_test_vlaue_to_change
-
                 lb $t0, 0($a0)          # Load the next character from the input string into $t0
                 lb $t1, 0($a1)          # Load the next character from the output string into $t1
-
-                beq $t0, '\n', fillRemaining # If input character is newline, go to fillRemaining
-                beq $t1, '\n', done_updating # If output character is newline, stop updating
+                
+                beq $t1, '\0', done_updating # If output character is newline, stop updating
 
                 beq $t0, ' ', skipSpaceInBuffer # Skip input spaces
                 beq $t1, ' ', skipSpaceInFloat # Skip output spaces
@@ -2098,19 +2111,10 @@ update_test_resultInLine:
                 addiu $a1, $a1, 1         # Skip one space in the output buffer
                 j startUpdating           # Return to the main loop
 
-            fillRemaining:
-
-                lb $t1, 0($a1)            # Check if there is more data in the output buffer
-                beq $t1, '\n', done_updating # If the next character is newline, finish updating
-                sb $t1, 0($a0)            # Store the remaining characters from output to input buffer
-                addiu $a0, $a0, 1         # Increment input buffer pointer
-                addiu $a1, $a1, 1         # Increment output buffer pointer
-                j fillRemaining      # Continue filling remaining characters
-
+         
             done_updating:
             
                 sb $t1, 0($a0)           # Store the newline character in the buffer
-                addiu $a0, $a0, 1         # Move to the next position in the buffer
                 lw $s1, end_target_line_address
 
                 # now we have the address of copied buffer in s1 and we want to paste it in a0 
