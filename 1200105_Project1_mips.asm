@@ -73,6 +73,7 @@ messageBGT: .asciiz "Average BGT: "
 messageLDL: .asciiz "Average LDL: "
 messageBPT: .asciiz "Average BPT: "
 
+
 zero_float: .float 0.0   # Define a floating point zero constant in data segment
 
 
@@ -1211,6 +1212,7 @@ average_test_value:
                         		
             BPT_test_sum: 
                         add.s $f23, $f23, $f1
+                        add.s $f24, $f24, $f2
                          beq $s7, 1, find_the_avg  # if s7 = 1 mean done file reading
                         j get_values_from_line
 
@@ -1227,12 +1229,15 @@ find_the_avg:
             cvt.s.w $f14, $f14
             mtc1 $s4, $f15  # Convert BPT count to floating-point
             cvt.s.w $f15, $f15
+            mtc1 $s4, $f16  # Convert BPT count to floating-point
+            cvt.s.w $f16, $f16
 
             # Divide sum by count to find the average
             div.s $f12, $f20, $f12  # Average for Hgb
             div.s $f13, $f21, $f13  # Average for BGT
             div.s $f14, $f22, $f14  # Average for LDL
             div.s $f15, $f23, $f15  # Average for BPT
+            div.s $f16, $f24, $f16  # Average for BPT
             
             
                    # Print newline character
@@ -1293,9 +1298,22 @@ find_the_avg:
             mov.s $f12, $f15  # Load average BPT for printing
             li $v0, 2         # Print float
             syscall
+
+            #print space and \ 
+            li $v0, 11          # System call for printing a character
+            li $a0, 32          # Load ASCII value of space (' ') into $a0
+            syscall
+
+            li $v0, 11          # System call for printing a character
+            li $a0, 92          # Load ASCII value of backslash ('\') into $a0
+            syscall
+    
+            mov.s $f12, $f16  # Load average BPT for printing
+            li $v0, 2         # Print float
+            syscall
             
                   # Print newline character
-   	     li $v0, 11          # System call for printing a character
+   	         li $v0, 11          # System call for printing a character
              li $a0, 10          # Load ASCII value of newline ('\n') into $a0
              syscall 
 
@@ -1754,8 +1772,8 @@ start_copying:
     lb $t0, 0($a0)        # Load the next character from the input string into $t0
     beq $t0, ' ', skipSpace # Check for the space character
     beq $t0, '\n', ReturnValues # Check for the end of the line
-
     sb $t0, 0($a1)        # Store the character in the output string
+    beq $t0, '/', BPT_handel # If backslash, jump to BPT_handel
     addiu $a0, $a0, 1     # Move to the next character in the input string
     addiu $a1, $a1, 1     # Move to the next position in the output string
     j start_copying       # Jump back to the start of the copy loop
@@ -1763,6 +1781,14 @@ start_copying:
 skipSpace:
     addiu $a0, $a0, 1     # Move to the next character in the input string
    j start_copying
+
+   BPT_handel: 
+             # just add \n to this byte where \ is exist
+                li $t1, 0x0a          # ASCII value of '\n'
+                sb $t1, 0($a1)        # Add a '\n' to the output string
+                addiu $a0, $a0, 1     # Move to the next character in the input string
+                addiu $a1, $a1, 1     # Move to the next position in the output string        
+                j start_copying
 
 
 
@@ -1896,6 +1922,16 @@ ReturnValues:
                         la $a0, outputString   # Load address of the output string into $a0
                         jal parseString        # Jump to the string parsing function
                         jal convertPartsToFloatAndPrint
+
+                        # handle the BPT test result Diastolic Blood Pressure
+                        addiu $a0, $a0, 1      # Move to the next character in the output string to skip the \n of 
+                        lb $t0, 0($a0)         # Load the next byte (character) from the strin
+                        beq $t0, '\0', doneConvertion
+                        mov.s $f4 , $f1
+                        jal parseString        # Jump to the string parsing function
+                        jal convertPartsToFloatAndPrint
+                        mov.s $f2 , $f1
+                        mov.s  $f1 , $f4
                         # f1 will have the float value of the test result
 
 
@@ -1927,8 +1963,9 @@ parseString:
     # Parse the integer part
 parseInteger:
     lb $t0, 0($a0)         # Load the next byte (character) from the string
-    beq $t0, '.', endInteger # Check for decimal point    
-    sub $t0, $t0, '0'      # Convert from ASCII to integer
+    beq $t0, '.', endInteger # Check for decimal point 
+    beq $t0, '\0', no_value
+    sub $t0, $t0, '0'     # Convert from ASCII to integer
     mul $t1, $t1, 10       # Multiply current result by 10
     add $t1, $t1, $t0      # Add the new digit
     
@@ -1979,6 +2016,8 @@ convertPartsToFloatAndPrint:
 
     # Combine integer and fractional parts
     add.s $f1, $f1, $f2
+    
+    no_value:
     
     jr $ra                 # Return
 	
