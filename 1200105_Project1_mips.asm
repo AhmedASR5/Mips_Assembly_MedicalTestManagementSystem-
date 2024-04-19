@@ -24,7 +24,7 @@ msgValid: .asciiz "\nValid ID.\n"
 msgInvalid: .asciiz "\nInvalid ID. Must be exactly 7 digits.\n"
 
 
-menu: .asciiz "\n--- Medical Test System Menu ---\n1. Add a new medical test\n2. Retrieve all patient tests by patient ID\n3. Retrieve all up normal patient tests\n4. Retrieve all patient tests in a given specific period\n5. Search for unnormal tests\n6. Average test value\n7. Update an existing test result\n8. Delete a test\n9. Exit\nSelect an option: "
+menu: .asciiz "\n--- Medical Test System Menu ---\n1. Add a new medical test\n2. Retrieve all patient tests by patient ID\n3. Retrieve all normal patient tests by patient ID \n4.Retrieve all up normal patient tests \n5.Retrieve all patient tests in a given specific period\n6.Search for unnormal tests based on the input medical test\n7. Average test value\n8. Update an existing test result\n9. Delete a test\n10. Exit\nSelect an option: "
 invalidOption: .asciiz "Invalid option. Please try again.\n"
 prompt: .asciiz "Your choice: "
 
@@ -113,16 +113,21 @@ second_date_prompt: .asciiz "\nEnter the second date (YYYY-MM)"
 
 #end of specific period -------------------
 
+#for unnormal test ---------------------
+
+found_unnormal_test: .asciiz "The unnormal test is found successfully.\n"
+
+#end of unnormal test -------------------
+
 
 #for update test result ---------------------
 
 address_of_test_vlaue_to_change: .word 0
 user_test_new_value: .word 0
-not_found_update: .asciiz "The test recorde is not found in the file.\n Please try again.\n"
+not_found_recorde: .asciiz "The test recorde is not found in the file.\n Please try again.\n"
 test_result_updated_promt: .asciiz "The test result is updated successfully.\n"
 bool_found: .word 0 
 end_target_line_address: .word 0
-
 
 
 #end of update test result -------------------
@@ -149,33 +154,38 @@ menu_loop:
     syscall
     move $t0, $v0  # Move user's choice into $t0
 
+#menu: .asciiz "\n--- Medical Test System Menu ---\n1. Add a new medical test\n2. Retrieve all patient tests by patient ID\n3. Retrieve all normal patient tests by patient ID \n4.Retrieve all up normal patient tests \n5.Retrieve all patient tests in a given specific period\n6.Search for unnormal tests based on the input medical test\n7. Average test value\n8. Update an existing test result\n9. Delete a test\n10. Exit\nSelect an option: "
+
     # Compare user's choice and jump to the corresponding procedure
     li $t1, 1
     beq $t0, $t1, add_test
     
     li $t1, 2
-    beq $t0, $t1, search_test
+    beq $t0, $t1, search_patient_tests_by_ID
 
     li $t1, 3
-    beq $t0, $t1, retrieve_all_up_normal_tests
-    
+    beq $t0, $t1, retrieve_all_normal_tests_by_ID
+
     li $t1, 4
+    beq $t0, $t1, retrieve_all_unnormal_tests_by_ID
+    
+    li $t1, 5
     beq $t0, $t1, retrieve_all_tests_in_period
 
-    li $t1, 5
-    beq $t0, $t1, search_unnormal_tests
-
     li $t1, 6
-    beq $t0, $t1, average_test_value
+    beq $t0, $t1, search_unnormal_tests_by_input_test
 
     li $t1, 7
-    beq $t0, $t1, update_existing_test_result
+    beq $t0, $t1, average_test_value
 
     li $t1, 8
+    beq $t0, $t1, update_existing_test_result
+
+    li $t1, 9
     beq $t0, $t1, delete_test
 
    # Process user's choice
-    li $t1, 9  # Exit option number
+    li $t1, 10  # Exit option number
     beq $t0, $t1, exit_program  # If user chooses to exit
 
     # If invalid option, show error and go back to menu
@@ -410,7 +420,7 @@ test_date:
 
 #------------------------------------Getting information from the user----------------------------  
 
-search_test: 
+search_patient_tests_by_ID: 
 
   
   # Prompt user for the test ID
@@ -476,7 +486,7 @@ print_id_match:
 
 
             li $v0, 4
-            la $a0, not_found_update
+            la $a0, not_found_recorde
             syscall
 
             li $v0, 11          # System call for printing a character
@@ -513,7 +523,7 @@ print_id_match:
      
      
 
-retrieve_all_up_normal_tests:
+retrieve_all_normal_tests_by_ID:
 
   # Prompt user for the test ID
     li $v0, 4
@@ -644,7 +654,7 @@ check_test_resultNormal:
 
 
 
-search_unnormal_tests:
+retrieve_all_unnormal_tests_by_ID:
 
   # Prompt user for the test ID
     li $v0, 4
@@ -908,6 +918,226 @@ retrieve_all_tests_in_period:
 
     j  menu_loop
 
+search_unnormal_tests_by_input_test :
+
+
+
+                #-----------------------------------Selecting the test name--------------------------------
+                   #promt
+                    li $v0, 4
+                    la $a0, menuTestNames
+                    syscall
+
+                    # Read user's choice
+                    li $v0, 5
+                    syscall
+                    move $t0, $v0  # Move user's choice into $t0
+
+                    # Compare user's choice and jump to the corresponding procedure
+
+                    li $t1, 1
+                    beq $t0, $t1, hemoglobin_label_test_value_unnormal
+
+                    li $t1, 2
+                    beq $t0, $t1, blood_glucose_test_label_test_value_unnormal
+
+                    li $t1, 3
+                    beq $t0, $t1, ldl_cholesterol_label_test_value_unnormal
+
+                    li $t1, 4
+                    beq $t0, $t1, blood_pressure_test_label_test_value_unnormal
+
+                  
+                    # If invalid option, show error and go back to menu
+                    li $v0, 4
+                    la $a0, promptInvalid
+                    syscall
+                    j test_name
+
+                    # load the valu of each test name in user_test_new_value
+
+                    hemoglobin_label_test_value_unnormal:
+                    li $t1, 0x111        # ASCII sum for "Hgb"
+                    sw $t1, user_test_new_value
+                    j goto_date_unnormal
+                          
+                    
+                    blood_glucose_test_label_test_value_unnormal:
+                    li $t1, 0xDD         # ASCII sum for "BGT"
+                    sw $t1, user_test_new_value
+                    j goto_date_unnormal
+                           
+                    ldl_cholesterol_label_test_value_unnormal: 
+                    li $t1, 0xDC         # ASCII sum for "LDL"
+                    sw $t1, user_test_new_value
+                    j goto_date_unnormal
+                    
+                    blood_pressure_test_label_test_value_unnormal:
+                    li $t1, 0xE6         # ASCII sum for "BPT"
+                    sw $t1, user_test_new_value
+                          
+               goto_date_unnormal: 
+                   
+                #load the buffer address
+                la $a0, buffer # Load the address of the buffer into $a0
+                li $s7, 0 # Initialize the flag to 0
+		
+
+            check_file_test_name_unnormal:
+
+                 move $t9, $a0 # Save the address of the start of the buffer in $t7
+                
+                 li $t5, 0 # reset the value of t5 to 0
+                 jal boolTestNameCheck # f(a0 , user_test_new_value) return equal if t5=1 else not.
+                 beq $t5, 1, printResult_line_if_unnormal # if t5 = 0 mean the test name is not equal to the user_test_new_value if t5 = 1 mean the test name is equal to the user_test_new_value
+
+
+	 	         move $a0, $t9
+                 jal get_next_line
+                 beq $s7, 1, check_founded_test_name_unnormal
+                 j check_file_test_name_unnormal
+
+
+
+            printResult_line_if_unnormal:
+               
+    
+            move $a0, $t9          # Load the address of the start of the line into $a0
+            jal line_test_values # f(a0) retrun F1 = test result in floating point, t4 = type of test, a0 = start of the next line
+
+            #-----------------------------------sum the values of the test result to calculate the average--------------------------------
+            
+            beq $t4, 1, Hgb_test_unnormal_test_name
+            beq $t4, 2, BGT_test_unnormal_test_name
+            beq $t4, 3, LDL_test_unnormal_test_name
+            beq $t4, 4, BPT_test_unnormal_test_name
+
+
+            Hgb_test_unnormal_test_name:
+
+                            lwc1 $f3, lowerBoundHgb # Load the lower bound value, which is 13.8
+                            lwc1 $f4, upperBoundHgb # Load the upper bound value, which is 17.2
+
+                            c.lt.s $f1, $f3         # Compare the test result in $f1 with the lower bound $f3
+                            bc1t printIfUnnormal   # If the test result is less than the lower bound, branch to if_it_unnormal
+
+                            c.le.s $f4, $f1         # Compare the test result in $f1 with the upper bound $f4
+                            bc1t printIfUnnormal   # If the test result is greater than the upper bound, branch to if_it_unnormal
+
+                            
+                            beq $s7, 1, check_founded_test_name_unnormal  # If the end of the file is reached, return to the menu
+                            j check_file_test_name_unnormal       # Continue to check file IDs							
+                                                        
+                                    
+                    
+            BGT_test_unnormal_test_name:
+
+                           lwc1 $f3, lowerBoundBGT # Load the lower bound value is 70.0
+                           lwc1 $f4, upperBoundBGT # Load the upper bound value is 99.0
+
+                           c.lt.s $f1, $f3         # Compare the test result in $f1 with the lower bound $f3
+                           bc1t printIfUnnormalByTestName   # If the test result is less than the lower bound, branch to if_it_unnormal
+
+                           c.le.s $f4, $f1         # Compare the test result in $f1 with the upper bound $f4
+                           bc1t printIfUnnormalByTestName   # If the test result is greater than the upper bound, branch to if_it_unnormal
+                           
+
+                           beq $s7, 1, check_founded_test_name_unnormal
+                           j  check_file_test_name_unnormal                                        
+
+            LDL_test_unnormal_test_name:
+
+ 
+                            lwc1 $f4, upperBoundLDL  # Load the upper bound value of 100.0 into $f3
+                            c.le.s $f4, $f1          # Compare the test result in $f1 with the upper bound in $f3
+                            bc1t printIfUnnormalByTestName    # If $f1 is not less than or equal to $f3 (i.e., $f1 is greater than $f3), branch to end_findNextLine
+                           
+                            beq $s7, 1, check_founded_test_name_unnormal
+                            j  check_file_test_name_unnormal         
+                        		
+            BPT_test_unnormal_test_name: 
+
+                            lwc1 $f4, upperBoundSystolicBPT # Load the upper bound value is 120.0
+                            lwc1 $f3, upperBoundDiastolicBPT # Load the upper bound value is 80.0
+
+                            c.lt.s $f1, $f3         # Compare the test result in $f1 with the lower bound $f3
+                            bc1t printIfUnnormalByTestName   # If the test result is less than the lower bound, branch to if_it_unnormal
+
+                            c.le.s $f4, $f1         # Compare the test result in $f1 with the upper bound $f4
+                            bc1t printIfUnnormalByTestName   # If the test result is greater than the upper bound, branch to if_it_unnormal
+
+
+                            beq $s7, 1,check_founded_test_name_unnormal
+                            j  check_file_test_name_unnormal
+
+              printIfUnnormalByTestName:
+
+                                                    #store in bool_found the value 1 to indicate that the test result is found
+                            li $t1, 1
+                            sw $t1, bool_found
+
+                            move $a0, $t9           # Load the address of the start of the line into $a0
+                            jal printLine             # Jump to printLine to print the data for this line
+                            
+                            beq $s7, 1, menu_loop   # If the end of the file is reached, return to the menu
+                            j check_file_test_name_unnormal       # Continue to check file IDs			
+
+
+
+    
+        check_founded_test_name_unnormal:
+
+            #if the bool_found = 1 mean the test result is found and updated
+            #else the test result is not found and not updated
+
+            lw $t1, bool_found
+            beq $t1, 1, test_result_unnormal_by_test_name
+
+            #if not found the record for update the test result print the message
+
+            #print new line character
+
+            li $v0, 11          # System call for printing a character
+            li $a0, 10          # Load ASCII value of newline ('\n') into $a0
+            syscall
+
+
+            li $v0, 4
+            la $a0, not_found_recorde
+            syscall
+
+            li $v0, 11          # System call for printing a character
+            li $a0, 10          # Load ASCII value of newline ('\n') into $a0
+            syscall
+
+            j menu_loop
+
+            
+      
+        test_result_unnormal_by_test_name:
+
+                li $v0, 11          # System call for printing a character
+                li $a0, 10          # Load ASCII value of newline ('\n') into $a0
+                syscall        
+                
+                li $v0, 4
+                la $a0, found_unnormal_test
+                syscall
+
+                li $v0, 11          # System call for printing a character
+                li $a0, 10          # Load ASCII value of newline ('\n') into $a0
+                syscall
+
+                #reset the value of bool_found to 0
+                li $t1, 0
+                sw $t1, bool_found
+
+                j menu_loop
+        
+
+
+
+j menu_loop
 
 
 average_test_value:
@@ -1269,7 +1499,7 @@ update_existing_test_result:
 
 
             li $v0, 4
-            la $a0, not_found_update
+            la $a0, not_found_recorde
             syscall
 
             li $v0, 11          # System call for printing a character
@@ -1824,6 +2054,12 @@ doneNoIDINfile:
 
 openReadFile:
 
+
+    la $a0, buffer        # Load the address of the buffer into $a0
+    li $t0, 0             # Initialize $t0 to 0 (the value to set each byte of the buffer)
+    li $t1, 5          # Set $t1 to the size of the buffer
+
+    
    # Open the file for reading
     li $v0, 13               # sys_open
     la $a0, filename         # Pointer to the filename
@@ -2150,6 +2386,7 @@ boolTestNameCheck:
             find_semicolon_for_test_name_check:
 
                 lb $t0, 0($a0)        # Load the next character from the input string into $t0
+                beq $t0, '\0', no_line_to_check # Check for the end of the string
                 beq $t0, ':', check_test_name # If colon, test name matche
                 addiu $a0, $a0, 1     # Move to the next character in the input string
                 j find_semicolon_for_test_name_check      # Jump back to the start of the loop
@@ -2218,7 +2455,13 @@ boolTestNameCheck:
 
                     equal_test_name:
                     li $t5, 1
-                    move $ra, $t8 # restore the return address
+                    move $ra, $t8 # restore the return addres
+                    jr $ra
+
+                    no_line_to_check:
+                    li $t5, 0
+                    move $ra, $t8 # restore the return addres
+                    li $s7 , 1 # set the value of s7 to 1 to indicate that the buffer is done.
                     jr $ra
                     
    
