@@ -634,12 +634,15 @@ check_test_resultNormal:
                             lwc1 $f4, upperBoundSystolicBPT # Load the upper bound value is 120.0
                             lwc1 $f3, upperBoundDiastolicBPT # Load the upper bound value is 80.0
 
-                            c.lt.s $f2, $f3         # Compare the test result in $f1 with the lower bound $f3
+                            c.le.s $f3 , $f2             # Compare the test result in $f1 with the lower bound $f3
                             bc1t if_it_unnormal   # If the test result is less than the lower bound, branch to if_it_unnormal
 
                             c.le.s $f4, $f1         # Compare the test result in $f1 with the upper bound $f4
                             bc1t if_it_unnormal   # If the test result is greater than the upper bound, branch to if_it_unnormal
 
+                            move $a0, $t9          # Load the address of the start of the line into $a0
+                            jal printLine          # f(a0) print the data for this line 
+                            
                             beq $s7, 1, menu_loop
                             j  cheack_file_IDs
 
@@ -648,7 +651,7 @@ check_test_resultNormal:
     
                   move $a0, $t9          # Load the address of the start of the line into $a0  
                   jal get_next_line
-                  j cheack_file_IDs_unnormal
+                  j cheack_file_IDs
 
                                                     
                             
@@ -761,7 +764,7 @@ check_test_resultUnnormal:
                             lwc1 $f4, upperBoundSystolicBPT # Load the upper bound value is 120.0
                             lwc1 $f3, upperBoundDiastolicBPT # Load the upper bound value is 80.0
 
-                            c.lt.s $f2, $f3         # Compare the test result in $f1 with the lower bound $f3
+                            c.le.s $f3 , $f2             # Compare the test result in $f1 with the lower bound $f3
                             bc1t printIfUnnormal   # If the test result is less than the lower bound, branch to if_it_unnormal
 
                             c.le.s $f4, $f1         # Compare the test result in $f1 with the upper bound $f4
@@ -1063,7 +1066,7 @@ search_unnormal_tests_by_input_test :
                             lwc1 $f4, upperBoundSystolicBPT # Load the upper bound value is 120.0
                             lwc1 $f3, upperBoundDiastolicBPT # Load the upper bound value is 80.0
 
-                            c.lt.s $f2, $f3         # Compare the test result in $f1 with the lower bound $f3
+                            c.le.s $f3 , $f2        # Compare the test result in $f1 with the lower bound $f3
                             bc1t printIfUnnormalByTestName   # If the test result is less than the lower bound, branch to if_it_unnormal
 
                             c.le.s $f4, $f1         # Compare the test result in $f1 with the upper bound $f4
