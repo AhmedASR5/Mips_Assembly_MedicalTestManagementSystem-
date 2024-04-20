@@ -634,7 +634,7 @@ check_test_resultNormal:
                             lwc1 $f4, upperBoundSystolicBPT # Load the upper bound value is 120.0
                             lwc1 $f3, upperBoundDiastolicBPT # Load the upper bound value is 80.0
 
-                            c.lt.s $f1, $f3         # Compare the test result in $f1 with the lower bound $f3
+                            c.lt.s $f2, $f3         # Compare the test result in $f1 with the lower bound $f3
                             bc1t if_it_unnormal   # If the test result is less than the lower bound, branch to if_it_unnormal
 
                             c.le.s $f4, $f1         # Compare the test result in $f1 with the upper bound $f4
@@ -761,7 +761,7 @@ check_test_resultUnnormal:
                             lwc1 $f4, upperBoundSystolicBPT # Load the upper bound value is 120.0
                             lwc1 $f3, upperBoundDiastolicBPT # Load the upper bound value is 80.0
 
-                            c.lt.s $f1, $f3         # Compare the test result in $f1 with the lower bound $f3
+                            c.lt.s $f2, $f3         # Compare the test result in $f1 with the lower bound $f3
                             bc1t printIfUnnormal   # If the test result is less than the lower bound, branch to if_it_unnormal
 
                             c.le.s $f4, $f1         # Compare the test result in $f1 with the upper bound $f4
@@ -1063,7 +1063,7 @@ search_unnormal_tests_by_input_test :
                             lwc1 $f4, upperBoundSystolicBPT # Load the upper bound value is 120.0
                             lwc1 $f3, upperBoundDiastolicBPT # Load the upper bound value is 80.0
 
-                            c.lt.s $f1, $f3         # Compare the test result in $f1 with the lower bound $f3
+                            c.lt.s $f2, $f3         # Compare the test result in $f1 with the lower bound $f3
                             bc1t printIfUnnormalByTestName   # If the test result is less than the lower bound, branch to if_it_unnormal
 
                             c.le.s $f4, $f1         # Compare the test result in $f1 with the upper bound $f4
