@@ -64,6 +64,7 @@ test_result_found: .asciiz "The test result is found successfully.\n"
 # for average test value ---------------------
 
 outputString: .space 50  # Allocate space for the output string
+outputString2: .space 50 
 integerPart: .word 0       # Space for the integer part
 fractionalPart: .word 0    # Space for the fractional part as an integer
 scale: .word 1             # Scale
@@ -72,6 +73,7 @@ messageHgb: .asciiz "Average Hgb: "
 messageBGT: .asciiz "Average BGT: "
 messageLDL: .asciiz "Average LDL: "
 messageBPT: .asciiz "Average BPT: "
+
 
 
 zero_float: .float 0.0   # Define a floating point zero constant in data segment
@@ -953,7 +955,7 @@ search_unnormal_tests_by_input_test :
                     li $v0, 4
                     la $a0, promptInvalid
                     syscall
-                    j test_name
+                    j search_unnormal_tests_by_input_test
 
                     # load the valu of each test name in user_test_new_value
 
@@ -1020,10 +1022,10 @@ search_unnormal_tests_by_input_test :
                             lwc1 $f4, upperBoundHgb # Load the upper bound value, which is 17.2
 
                             c.lt.s $f1, $f3         # Compare the test result in $f1 with the lower bound $f3
-                            bc1t printIfUnnormal   # If the test result is less than the lower bound, branch to if_it_unnormal
+                            bc1t printIfUnnormalByTestName   # If the test result is less than the lower bound, branch to if_it_unnormal
 
                             c.le.s $f4, $f1         # Compare the test result in $f1 with the upper bound $f4
-                            bc1t printIfUnnormal   # If the test result is greater than the upper bound, branch to if_it_unnormal
+                            bc1t printIfUnnormalByTestName   # If the test result is greater than the upper bound, branch to if_it_unnormal
 
                             
                             beq $s7, 1, check_founded_test_name_unnormal  # If the end of the file is reached, return to the menu
@@ -1787,7 +1789,7 @@ skipSpace:
                 li $t1, 0x0a          # ASCII value of '\n'
                 sb $t1, 0($a1)        # Add a '\n' to the output string
                 addiu $a0, $a0, 1     # Move to the next character in the input string
-                addiu $a1, $a1, 1     # Move to the next position in the output string        
+                la $a1, outputString2    
                 j start_copying
 
 
@@ -1861,6 +1863,8 @@ ReturnValues:
       
             move $t7, $a0          # save the start of the next line
             sb $t0, 0($a1)        # Store \n in the output string for use it for termination
+            
+            li $t2,0 # rest the value of t2 to 0  for string2. 
 
 
             #loop to check outupt string if it has dot or not
@@ -1885,11 +1889,21 @@ ReturnValues:
                     li $t1, 0x0A          # ASCII value of '\n'
                     sb $t1, 0($a0)        # Add a newline character after the decimal point
                    
+  
+         dot_found:  
+                     bne $t4, 4, skip_this_no_need
+                     beq $t2, 1, skip_this_no_need  
 
-           dot_found:  # don't do anything
+                     # use t2 for terminate the string2 
+                     #store in t2 the value 1  to not make the loop to check the dot again
+                        li $t2, 1
+                        la $a0, outputString2   # Load address of the output string into $a0
+                        j check_dot 
 
 
+            skip_this_no_need:
 
+	   
             beq $t4, 1, Hgb_test_type
             beq $t4, 2, BGT_test_type
             beq $t4, 3, LDL_test_type
@@ -1922,14 +1936,12 @@ ReturnValues:
                         la $a0, outputString   # Load address of the output string into $a0
                         jal parseString        # Jump to the string parsing function
                         jal convertPartsToFloatAndPrint
-
-                        # handle the BPT test result Diastolic Blood Pressure
-                        addiu $a0, $a0, 1      # Move to the next character in the output string to skip the \n of 
-                        lb $t0, 0($a0)         # Load the next byte (character) from the strin
-                        beq $t0, '\0', doneConvertion
                         mov.s $f4 , $f1
+
+                        la $a0, outputString2   # Load address of the output string into $a0
                         jal parseString        # Jump to the string parsing function
                         jal convertPartsToFloatAndPrint
+                        
                         mov.s $f2 , $f1
                         mov.s  $f1 , $f4
                         # f1 will have the float value of the test result
