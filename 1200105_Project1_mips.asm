@@ -1482,7 +1482,7 @@ update_existing_test_result:
 
                     # if S6 = 1, skip this part , beacause the user want to delete the test result
 
-                    beq $s6, 1, skip_edit # for delete the test result
+                    beq $s6, 1, go_delete # for delete the test result
                     
 
                     # Prompt the user for input
@@ -1495,14 +1495,28 @@ update_existing_test_result:
                     la $a0, floatBuffer       # Address of buffer to store the string
                     li $a1, 20                # The maximum number of characters to read
                     syscall
+                    
+                    move $a0,$t9  # Load the address of the start of the line into $a0
+                    jal update_test_resultInLine
+                    j check_founded_bool_update
+
+
+
+                    go_delete: 
+                    move $a0,$t9  # Load the address of the start of the line into $a0
+                    jal update_test_resultInLine
+                    j check_founded_bool_update
+
+
 
                     # change the value of the test result in the buffer
 
                     skip_edit:
+                    jal get_next_line
+                    beq $s7, 1, check_founded_bool_update
+                    j check_file_IDs_Update
 
-                    move $a0,$t9  # Load the address of the start of the line into $a0
-                    jal update_test_resultInLine
-
+                
                    
 
         check_founded_bool_update:
@@ -1547,6 +1561,7 @@ update_existing_test_result:
                 li $v0, 4
                 la $a0, test_result_updated_promt
                 syscall
+                j doneee
 
                 promt_delete: 
 
@@ -1559,6 +1574,7 @@ update_existing_test_result:
                 li $a0, 10          # Load ASCII value of newline ('\n') into $a0
                 syscall
 
+            doneee:
                 #reset the value of bool_found to 0
                 li $t1, 0
                 li $s6, 0
@@ -2420,11 +2436,26 @@ update_test_resultInLine:
          
             done_updating:
 
-                skip_to_delete1:
 
+			
+                skip_to_delete1:
+                
+ 		lw $s1, end_target_line_address
+                bne $s6 , 1, skip_for_update # here to delete the line in the buffer
+
+                # reach the next line in s6
+
+                #move $s5, $a0 # save the address of the line in s
+                #move $a0 , $s1
+                #jal get_next_line # get the next line
+                #move $s1, $a0 # save the address of the next line in s6
+                #move $a0, $s5 # restore the address of the line in a0
+
+            skip_for_update: 
+                    
             
                 sb $t1, 0($a0)           # Store the newline character in the buffer
-                lw $s1, end_target_line_address
+              
 
                 # now we have the address of copied buffer in s1 and we want to paste it in a0 
 
