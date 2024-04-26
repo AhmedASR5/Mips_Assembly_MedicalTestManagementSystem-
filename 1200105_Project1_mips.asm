@@ -123,12 +123,13 @@ found_unnormal_test: .asciiz "The unnormal test is found successfully.\n"
 #end of unnormal test -------------------
 
 
-#for update test result ---------------------
+#for update and delete test result ---------------------
 
 address_of_test_vlaue_to_change: .word 0
 user_test_new_value: .word 0
 not_found_recorde: .asciiz "The test recorde is not found in the file.\n Please try again.\n"
 test_result_updated_promt: .asciiz "The test result is updated successfully.\n"
+test_result_deleted_promt: .asciiz "The test result is deleted successfully.\n"
 bool_found: .word 0 
 end_target_line_address: .word 0
 
@@ -182,9 +183,11 @@ menu_loop:
     beq $t0, $t1, average_test_value
 
     li $t1, 8
-    beq $t0, $t1, update_existing_test_result
+    li $s6, 0 # reset the flag to 0
+    beq $t0, $t1, update_existing_test_result 
 
     li $t1, 9
+    # this function use update function , 
     beq $t0, $t1, delete_test
 
    # Process user's choice
@@ -1328,6 +1331,10 @@ find_the_avg:
 
 #----------------------------------------------end of get average test value-----------------------------------------------
 
+delete_test:
+
+li $s6 , 1
+
 
 update_existing_test_result:
 
@@ -1473,7 +1480,11 @@ update_existing_test_result:
 
                     #-----------------Prompt user for the new test result----------------------
 
+                    # if S6 = 1, skip this part , beacause the user want to delete the test result
+
+                    beq $s6, 1, skip_edit # for delete the test result
                     
+
                     # Prompt the user for input
                     li $v0, 4                  # Syscall for print string
                     la $a0, promptTestResult             # Address of prompt string
@@ -1487,22 +1498,12 @@ update_existing_test_result:
 
                     # change the value of the test result in the buffer
 
+                    skip_edit:
+
                     move $a0,$t9  # Load the address of the start of the line into $a0
-                    
                     jal update_test_resultInLine
 
-              
-
-                                                                                                       
-                    j menu_loop          
-
-                skip_edit:
-                    jal get_next_line
-                    beq $s7, 1, check_founded_bool_update
-                    j check_file_IDs_Update
-
-
-
+                   
 
         check_founded_bool_update:
 
@@ -1535,13 +1536,24 @@ update_existing_test_result:
       
         test_result_updated:
 
+
                 li $v0, 11          # System call for printing a character
                 li $a0, 10          # Load ASCII value of newline ('\n') into $a0
-                syscall        
-                
+                syscall
+
+
+                beq $s6, 1, promt_delete # if s6 = 1 mean the user want to delete the test result
+
                 li $v0, 4
                 la $a0, test_result_updated_promt
                 syscall
+
+                promt_delete: 
+
+                li $v0, 4
+                la $a0, test_result_deleted_promt
+                syscall
+
 
                 li $v0, 11          # System call for printing a character
                 li $a0, 10          # Load ASCII value of newline ('\n') into $a0
@@ -1549,6 +1561,7 @@ update_existing_test_result:
 
                 #reset the value of bool_found to 0
                 li $t1, 0
+                li $s6, 0
                 sw $t1, bool_found
 
                 j menu_loop
@@ -1558,11 +1571,6 @@ update_existing_test_result:
 
     j menu_loop
 
-
-delete_test:
-    j menu_loop
-
- 
 #---------------------------------------Functions area--------------------------------------------
 validID:
     li $v0, 4
@@ -2340,6 +2348,7 @@ update_test_resultInLine:
 
 
 
+
          li $t2, 0 # rest the value of asscii sum.
          move $t8, $ra # save the return address
          la $a1, floatBuffer # Load the address of the input string into $a1
@@ -2360,7 +2369,13 @@ update_test_resultInLine:
 
                 jal copy_buffer # when we reach the end of main buffer line we copy the buffer for extend cases 
                 # it returns in end_target_line_address the start of the next line of the copied buffer.
-                
+
+
+#-------------------------------------------------------------------------------
+
+    beq $s6 , 1, skip_to_delete1 # here to delete the line in the buffer
+
+#-------------------------------------------------------------------------------            
 
         find_semicolon_update:
              lb $t0, 0($a0)        # Load the next character from the input string into $t0
@@ -2377,7 +2392,8 @@ update_test_resultInLine:
             j find_semicolon_update      # Otherwise, keep looking for semicolons
 
             #this loop to find the end of the line of a0 and store it in end_target_line_address
-           
+
+       
      startUpdating:
 
                 lb $t0, 0($a0)          # Load the next character from the input string into $t0
@@ -2403,6 +2419,9 @@ update_test_resultInLine:
 
          
             done_updating:
+
+                skip_to_delete1:
+
             
                 sb $t1, 0($a0)           # Store the newline character in the buffer
                 lw $s1, end_target_line_address
