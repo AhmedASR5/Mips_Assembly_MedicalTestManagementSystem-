@@ -1,10 +1,17 @@
 .data
 
-filename: .asciiz "C:\\Users\\ahmad\\Downloads\\testResults.txt"
+
 
 openFlags: .word 0x0001       # Flag for write and create
 mode: .word 0x01B6            # Mode for file permissions (0644)
 
+dashes_prompt: .asciiz "\n______________________________________________\n"  
+        welcome_prompt: .asciiz "Welcome to Medical Test Management System"      
+        file_path_prompt: .asciiz "\nEnter your file path:\n "
+        filename: .space 256    # Allocate space for file path
+        file_not_found_msg: .asciiz "File not found or path incorrect. Please try again.\n"
+
+file_contents: .asciiz "\nMedical file contents:\n"
 
 # -----------------insert record to the file ---------
 
@@ -132,7 +139,7 @@ found_unnormal_test: .asciiz "The unnormal test is found successfully.\n"
 
 address_of_test_vlaue_to_change: .word 0
 user_test_new_value: .word 0
-not_found_recorde: .asciiz "The test recorde is not found in the file.\n Please try again.\n"
+not_found_recorde: .asciiz "The test recorde is not found in the file check the \n ID(7digit) (year month xxxx-xx) or the value of floating point (be sure that all correct according to your menu requirments .\n Please try again.\n"
 test_result_updated_promt: .asciiz "The test result is updated successfully.\n"
 test_result_deleted_promt: .asciiz "The test result is deleted successfully.\n"
 bool_found: .word 0 
@@ -146,9 +153,74 @@ end_target_line_address: .word 0
 
 main:
 
+file_path_input:
+ # Display dashes prompt 
+        li $v0, 4                   # syscall code for print_string
+        la $a0, dashes_prompt        # load address of the prompt string
+        syscall
+        
+    # Display welcome prompt for user 
+        li $v0, 4                   # syscall code for print_string
+        la $a0, welcome_prompt        # load address of the prompt string
+        syscall
+    
+    # Display dashes prompt 
+        li $v0, 4                   # syscall code for print_string
+        la $a0, dashes_prompt        # load address of the prompt string
+        syscall
+
+
+
+    # Display prompt for enter file_path
+        li $v0, 4                   # syscall code for print_string
+        la $a0, file_path_prompt        # load address of the prompt string
+        syscall
+        
+    # Read file path from user
+
+        li $v0, 8                   # syscall code for read_string
+        la $a0, filename           # load address of the file_path buffer
+        li $a1, 256                 # maximum number of characters to read
+        syscall
+        
+    #replace  \n  at the last of file path input with \0
+        li $t0, 0                   # counter
+replace_newline:
+        lb $t1, filename($t0)      # load a character from file_path
+        beqz $t1, end_replace       # if null character, exit loop
+        beq $t1, 10, replace        # if newline character, replace
+        addi $t0, $t0, 1            # increment counter
+        j replace_newline
+replace:
+        li $t2, 0x0                 # load null character
+        sb $t2, filename($t0)      # store null character
+end_replace:
+
+        # File path is now stored in filename
+
+        # Call readtestFile function  
+        # if the file read correctly :
+        jal readtestFile      # Call the  function
+        li $t0, 0
+        j file_readed_succesfully  # continue with the  program
+        
+        # else the file read correctly :
+     
+file_open_failed:
+    
+        # Display dashes prompt 
+        li $v0, 4                   # syscall code for print_string
+        la $a0, file_not_found_msg       # load address of the prompt string
+        syscall
+        
+        j file_path_input #write another valid 
+
+file_readed_succesfully:
+
 #----------------------------------------Menu--------------------------------     
 
 menu_loop:
+
 
 
     jal openReadFile
@@ -736,7 +808,7 @@ cheack_file_IDs_unnormal:
 
     beq $t5, 1, check_test_resultUnnormal
     jal get_next_line
-    beq $s7, 1, menu_loop
+    beq $s7, 1, check_founded_bool_retreive_all_unnormal_tests
     j cheack_file_IDs_unnormal
 
 
@@ -776,7 +848,7 @@ check_test_resultUnnormal:
                             bc1t printIfUnnormal   # If the test result is greater than the upper bound, branch to if_it_unnormal
 
                             
-                            beq $s7, 1, menu_loop   # If the end of the file is reached, return to the menu
+                            beq $s7, 1, check_founded_bool_retreive_all_unnormal_tests   # If the end of the file is reached, return to the menu
                             j cheack_file_IDs_unnormal       # Continue to check file IDs							
                                                         
                                     
@@ -793,7 +865,7 @@ check_test_resultUnnormal:
                            bc1t printIfUnnormal   # If the test result is greater than the upper bound, branch to if_it_unnormal
                            
 
-                           beq $s7, 1, menu_loop
+                           beq $s7, 1, check_founded_bool_retreive_all_unnormal_tests
                            j  cheack_file_IDs_unnormal                                        
 
             LDL_test_unnormal:
@@ -803,7 +875,7 @@ check_test_resultUnnormal:
                             c.le.s $f4, $f1          # Compare the test result in $f1 with the upper bound in $f3
                             bc1t printIfUnnormal    # If $f1 is not less than or equal to $f3 (i.e., $f1 is greater than $f3), branch to end_findNextLine
                            
-                            beq $s7, 1, menu_loop
+                            beq $s7, 1, check_founded_bool_retreive_all_unnormal_tests
                             j  cheack_file_IDs_unnormal         
                         		
             BPT_test_unnormal: 
@@ -818,20 +890,59 @@ check_test_resultUnnormal:
                             bc1t printIfUnnormal   # If the test result is greater than the upper bound, branch to if_it_unnormal
 
 
-                            beq $s7, 1, menu_loop
+                            beq $s7, 1, check_founded_bool_retreive_all_unnormal_tests
                             j  cheack_file_IDs_unnormal
 
 
 
               printIfUnnormal:
                   
+                                                   #store in bool_found the value 1 to indicate that the test result is found
+                            li $t1, 1
+                            sw $t1, bool_found
+                            
                             move $a0, $t9           # Load the address of the start of the line into $a0
                             jal printLine             # Jump to printLine to print the data for this line
                             
-                            beq $s7, 1, menu_loop   # If the end of the file is reached, return to the menu
-                            j cheack_file_IDs_unnormal       # Continue to check file IDs			
+                            beq $s7, 1, check_founded_bool_retreive_all_unnormal_tests   # If the end of the file is reached, return to the menu
+                            j cheack_file_IDs_unnormal       # Continue to check file IDs
 
-                                    
+
+
+
+     check_founded_bool_retreive_all_unnormal_tests:
+
+            #if the bool_found = 1 mean the test result is found and updated
+            #else the test result is not found and not updated
+
+            lw $t1, bool_found
+
+            beq $t1, 1, done_no_need_action
+
+            #if the test result is not found
+
+            #print new line character
+
+            li $v0, 11          # System call for printing a character
+            li $a0, 10          # Load ASCII value of newline ('\n') into $a0
+            syscall
+
+
+            li $v0, 4
+            la $a0, not_found_recorde
+            syscall
+
+            li $v0, 11          # System call for printing a character
+            li $a0, 10          # Load ASCII value of newline ('\n') into $a0
+            syscall
+
+
+
+    done_no_need_action:
+          li $t1, 0
+          sw $t1, bool_found
+          j menu_loop
+       
 
 
     j menu_loop
@@ -846,7 +957,7 @@ retrieve_all_tests_in_period:
    		 syscall
 
    		 # Read the test ID as a string
-    		li $v0, 8
+    	li $v0, 8
    		la $a0, inputBuffer_ID
   		li $a1, 20
   		  syscall
@@ -916,7 +1027,7 @@ retrieve_all_tests_in_period:
 
                 beq $t5, 1, check_test_result_period
                 jal get_next_line
-                beq $s7, 1, menu_loop
+                beq $s7, 1, period_message
                 j check_file_IDs_period
 
 
@@ -958,18 +1069,59 @@ retrieve_all_tests_in_period:
 
                 print_line_valid_year_month:
 
+                                              #store in bool_found the value 1 to indicate that the test result is found
+                    li $t1, 1
+                    sw $t1, bool_found
                     move $a0, $t9                     # Load the address of the start of the line into $a0
                     jal printLine                     # Function to print the line if it's within the date range
-                    beq $s7, 1, menu_loop             # If the end of the file is reached, return to the menu
+                    beq $s7, 1, period_message             # If the end of the file is reached, return to the menu
                     j check_file_IDs_period           # Continue to check file IDs
 
                 skip_print:
                     jal get_next_line
-                    beq $s7, 1, menu_loop
+                    beq $s7, 1, period_message
                     j check_file_IDs_period
         
 
-    j  menu_loop
+
+
+     period_message:
+
+            #if the bool_found = 1 mean the test result is found and updated
+            #else the test result is not found and not updated
+
+            lw $t1, bool_found
+            beq $t1, 1, no_action_needed
+
+            #if the test result is not found
+
+            #print new line character
+
+            li $v0, 11          # System call for printing a character
+            li $a0, 10          # Load ASCII value of newline ('\n') into $a0
+            syscall
+
+
+            li $v0, 4
+            la $a0, not_found_recorde
+            syscall
+
+            li $v0, 11          # System call for printing a character
+            li $a0, 10          # Load ASCII value of newline ('\n') into $a0
+            syscall
+
+            j menu_loop
+
+            
+      
+        no_action_needed:
+
+                #reset the bool_found to 0
+                li $t1, 0
+                sw $t1, bool_found
+
+                j menu_loop			
+
 
 search_unnormal_tests_by_input_test :
 
@@ -1876,6 +2028,8 @@ skipSpace:
   addiu $a0, $a0, 1      # Skip the : character
   lb $t0, 0($a0)        # Load the next character from the input string into $t0
   beq $t0, ' ', GetUniqeValueOfTestName # Check for the end of the string
+  beq $t0, '\0', get_type_of_test # Check for the end of the string
+  
   
   # sum the ascii values of the test name to choose the test value to calculate the average
     beq $t0, ',', get_type_of_test # If colon, have unique value for each test name 
@@ -2654,7 +2808,54 @@ copy_buffer:
 #---------------------------------------End of file Functions area--------------------------------------------
 
 
+     
+ # Function To read and print file contents: readtestFile
+readtestFile:
+            # Open the file
+            li $v0, 13              # syscall code for open file
+            la $a0, filename        # load address of filename
+            li $a1, 0               # open for read-only
+            syscall
+            move $s0, $v0           # store file descriptor
+            
+            
+            # Check if file opened successfully
+            blt $v0, $zero, file_open_failed # branch if $v0 < 0 (file failed to open)
 
+            # Read from the file
+
+read_loop:
+            li $v0, 14              # syscall code for read file
+            move $a0, $s0           # file descriptor
+            la $a1, buffer          # load address of buffer
+            li $a2, 2000             # maximum number of bytes to read
+            syscall
+            
+
+            # Check if end of file
+            beq $v0, 0, end_read    # exit loop if end of file
+            
+        
+            # Display dashes prompt 
+            li $v0, 4                   # syscall code for print_string
+            la $a0, file_contents       # load address of the prompt string
+            syscall
+        
+            # Print the contents read
+            li $v0, 4               # syscall code for print_string
+            move $a0, $a1           # load address of buffer
+            syscall
+
+            j read_loop             # repeat read loop
+
+    end_read:
+            # Close the file
+            li $v0, 16              # syscall code for close file
+            move $a0, $s0           # file descriptor
+            syscall
+            
+            jr $ra                  # return from the function
+        
 
 #---------------------------------------Functions area--------------------------------------------        
 
