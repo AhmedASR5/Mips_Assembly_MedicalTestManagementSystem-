@@ -1,10 +1,12 @@
 .data
 
-filename: .asciiz "testResults.txt"
+filename: .asciiz "C:\\Users\\ahmad\\Downloads\\testResults.txt"
 
 openFlags: .word 0x0001       # Flag for write and create
 mode: .word 0x01B6            # Mode for file permissions (0644)
 
+
+# -----------------insert record to the file ---------
 
 promptID: .asciiz "Enter Patient ID (7 digits): "
 idBuffer: .space 11 # Buffer for ID, assuming max 10 chars + null terminator
@@ -19,6 +21,9 @@ promptTestResult: .asciiz "\nEnter Test Result (as a floating-point number): "
 .align 3  # Align the next data declaration on a doubleword boundary
 floatBuffer: .space 20  # Reserve 8 bytes for storing a double-precision float
 
+combinedBuffer: .space 100  # 
+
+# -----------insert record to the file  --------- ---------------------
 
 msgValid: .asciiz "\nValid ID.\n"
 msgInvalid: .asciiz "\nInvalid ID. Must be exactly 7 digits.\n"
@@ -210,22 +215,6 @@ exit_program:
 
 add_test:
 
-#----------------------------------------Opening the file for writing----------------------------------------
-
-# Open the file for writing
-
-    # Open the file for writing
-    li $v0, 13                 # Syscall: open file
-    la $a0, filename           # Filename: pointer to "testResults.txt"
-    lw $a1, openFlags          # Flags: write only
-    syscall
-    move $s7, $v0              # Save the file descriptor to $s7
-    
-    # Check if file opened successfully
-    bltz $s7, open_failed  
-
-#---------------------------------------- End of Opening the file for writing--------------------------------
-
     # Prompt for Patient ID
     li $v0, 4
     la $a0, promptID
@@ -289,7 +278,6 @@ test_name:
     # now save the test choises in in testName buffer
 
 
-
     hemoglobin_label:
                 la $a0, testName     # Load the address of testName buffer
                 la $a1, hemoglobin    # Load the address of "Hgb" string
@@ -349,67 +337,123 @@ test_date:
 
 #----------------------------------- writing the information to the file--------------------------------
 
+  la $a1, combinedBuffer       # Load address of combinedBuffer into $a0
+
 
  # Replace newline with colon in testDate if present
     la $a0, idBuffer
     jal replace_newline_with_colon
 
-    # Write Patient ID to the file
-    li $v0, 15
-    move $a0, $s7
-    la $a1, idBuffer
-    li $a2, 11                 # Example length, adjust based on actual content length
-    syscall
+    ori $a2, $zero, ':'  # Load ASCII value for ',' into $a2
+    la $a0, idBuffer
+    jal paste_on_combinedBuffer
+
 
 
     # Replace newline with comma in testName if present
     la $a0, testName
     jal replace_newline_with_comma
 
-    # Write Test Name
-    li $v0, 15
-    move $a0, $s7
-    la $a1, testName
-    li $a2, 7             # Example length, adjust as needed
-    syscall
+    ori $a2, $zero, ','  # Load ASCII value for ',' into $a2
+    la $a0, testName
+    jal paste_on_combinedBuffer
+
+
+
 
     # Replace newline with comma in testDate if present
     la $a0, testDate
     jal replace_newline_with_comma
 
-    # Write Test Date
-    li $v0, 15
-    move $a0, $s7
-    la $a1, testDate
-    li $a2, 9                  # Example length, adjust as needed
-    syscall
+    
+    ori $a2, $zero, ','  # Load ASCII value for ',' into $a2
+    la $a0, testDate
+    jal paste_on_combinedBuffer
+
 
     # Replace newline with space in floatBuffer if present
 
     la $a0, floatBuffer
-    jal replace_newline_with_space
-
-    # Write Test Result to the file
-    li $v0, 15                 # Syscall for write to file
-    move $a0, $s7             
-    la $a1, floatBuffer      
-    li $a2, 20
-    syscall
+    ori $a2, $zero, '\n'  # Load ASCII value for ',' into $a2
+    jal paste_on_combinedBuffer
 
 
-    # Write newline to the file
-    li $v0, 15
-    move $a0, $s7
-    la $a1, newline
-    li $a2, 1
-    syscall
+    la $a1, buffer       # Load address of buffer into $a1
+    find_end_of_buffer:
+        lb $t0, 0($a1)                # Load a byte from the source
+        beq $t0,'\0', write_on_buffer2      # If the byte is the end character, exit the loop
+        addiu $a1, $a1, 1             # Increment the source buffer address
+        j find_end_of_buffer        # Repeat the loop
 
 
- # Close the file
-    li $v0, 16                 # Syscall: close file
-    move $a0, $s7              # File descriptor
-    syscall
-    
+        write_on_buffer2:
+            # $a0 = source string address
+            # $a1 = destination string address
+            # $a2 = ASCII value of end character
+            #overwrite the end character with the new line character
+            
+            #we will cheack first if the previous character is a new line character or not
+            #if it is a new line character we will not overwrite it with a new line character
+            #if it is not a new line character we will overwrite it with a new line character
+            # we will subtract 1 from the address of the destination string address to overwrite the previous character
+
+
+            la $a0, combinedBuffer       # Load address of combinedBuffer into $a0
+            sub $a1, $a1, 1
+            lb $t0, 0($a1)                # Load a byte from the source
+            beq $t0,'\n', looop__copy2      # If the byte is the end character, exit the loop
+            addu $a1, $a1, 1             # Increment the destination buffer address
+
+            ori $a2, $zero, '\n'  # Load ASCII value for ',' into $a2
+            sb $a2, 0($a1)                # Store the byte in the destination
+            addiu $a1, $a1, 1
+
+            la $a0, combinedBuffer       # Load address of combinedBuffer into $a0
+
+            looop__copy2:
+                lb $t0, 0($a0)                # Load a byte from the source
+                sb $t0, 0($a1)                # Store the byte in the destination
+                beq $t0,'\0', done_copyy      # If the byte is the end character, exit the loop
+                addiu $a0, $a0, 1             # Increment the source buffer address
+                addiu $a1, $a1, 1             # Increment the destination buffer address
+                j looop__copy2        # Repeat the loop
+
+      
+      done_copyy:
+
+      ori $a2, $zero, '\n'  # Load ASCII value for ',' into $a2
+      sb $a2, 0($a1)        # Store the byte in the destination
+      
+
+      
+    jal writeBufferToFile 
+
+
+    # Return to the menu
+    j menu_loop
+
+
+    # Combine all the data into a single string
+
+
+paste_on_combinedBuffer:
+    # $a0 = source string address
+    # $a1 = destination string address
+    # $a2 = ASCII value of end character
+
+    looop__copy:
+        lb $t0, 0($a0)                # Load a byte from the source
+        sb $t0, 0($a1)                # Store the byte in the destination
+        beq $t0, $a2, done_copyyy      # If the byte is the end character, exit the loop
+        addiu $a0, $a0, 1             # Increment the source buffer address
+        addiu $a1, $a1, 1             # Increment the destination buffer address
+        j looop__copy        # Repeat the loop
+
+    done_copyyy:
+         addiu $a1, $a1, 1
+        jr $ra                        # Return from the function
+
+
 #-----------------------------------End of writing the information to the file--------------------------------
 
 
@@ -2608,7 +2652,6 @@ copy_buffer:
 #-----------------------------------end copy buffer function--------------------------------------------------
 
 #---------------------------------------End of file Functions area--------------------------------------------
-
 
 
 
